@@ -26,6 +26,17 @@ A lightweight, single-file API testing tool that runs in the browser. Pick a pre
 - Open `index.html` in Chrome, or
 - Use the GitHub Pages link once Pages is enabled for this repo
 
+## Copy and paste
+
+| Button | Copies |
+|---|---|
+| **Copy all** (top) | Inputs, request, response and readable result as one Markdown block |
+| **Copy request** / **Copy as curl** | The request as plain HTTP text, or as a curl command for the terminal |
+| **Copy response** | Status, time, size and the JSON body |
+| **Copy** (Inputs / Result) | The form values, or the plain-language result |
+
+API keys are always replaced with placeholders like `<gemini_key>` in anything copied. Very large responses are cut at 20,000 characters.
+
 ## Add your own API
 
 1. Click **+ Add API**

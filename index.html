@@ -45,6 +45,15 @@ textarea{font-family:var(--font-mono);font-size:12.5px;resize:vertical;min-heigh
 .btn.primary:hover{filter:brightness(1.07)}
 .btn.primary:disabled{opacity:.7;cursor:wait}
 .btn.small{padding:4px 10px;font-size:12.5px}
+.copybar{display:inline-flex;gap:4px;align-items:center}
+.tabs .copybar{padding:4px 0}
+.tabs .copybar .copy-btn{border:1px solid var(--line);border-radius:6px;padding:3px 9px;color:var(--muted);background:var(--panel)}
+.tabs .copybar .copy-btn.done{color:var(--ok);border-color:var(--ok)}
+.copy-btn{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:6px;padding:3px 9px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+.copy-btn:hover:not(:disabled){color:var(--ink);background:var(--sunk)}
+.copy-btn:disabled{opacity:.45;cursor:not-allowed}
+.copy-btn.done,.btn.done{color:var(--ok);border-color:var(--ok)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:50}
 .icon-btn{border:0;background:none;cursor:pointer;color:var(--muted);width:28px;height:28px;border-radius:6px;flex:none;display:inline-grid;place-items:center;font-size:15px;line-height:1}
 .icon-btn:hover{background:var(--sunk);color:var(--ink)}
 .label{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
@@ -200,6 +209,7 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
     <div class="mid-head">
       <div><h1 id="apiName">API</h1><p id="apiDesc"></p></div>
       <span class="spacer"></span>
+      <button type="button" class="btn small" id="copyAll" title="Inputs, request, response and result as one block, ready to paste into a chat or doc">Copy all</button>
       <button type="button" class="btn small" id="openRight" hidden>Show inputs &amp; result</button>
     </div>
 
@@ -214,6 +224,8 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
         <button type="button" role="tab" aria-selected="false" data-rtab="headers">Headers <span class="count" id="cHeaders"></span></button>
         <button type="button" role="tab" aria-selected="false" data-rtab="body">Body <span class="count" id="cBody"></span></button>
         <button type="button" role="tab" aria-selected="false" data-rtab="auth">Auth <span class="count" id="cAuth"></span></button>
+        <span class="grow"></span>
+        <span class="copybar"><button type="button" class="copy-btn" id="copyReq">Copy request</button><button type="button" class="copy-btn" id="copyCurl">Copy as curl</button></span>
       </div>
       <div class="scroll">
         <div class="pane" id="rt-params"><p class="hint" id="paramsEmpty" style="margin:0 0 8px">No query params.</p><div id="paramsKV"></div></div>
@@ -244,6 +256,8 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
         <button type="button" role="tab" aria-selected="true" data-xtab="json">JSON</button>
         <button type="button" role="tab" aria-selected="false" data-xtab="raw">Raw</button>
         <button type="button" role="tab" aria-selected="false" data-xtab="rheaders">Headers <span class="count" id="cResHeaders"></span></button>
+        <span class="grow"></span>
+        <span class="copybar"><button type="button" class="copy-btn" id="copyRes" disabled>Copy response</button></span>
       </div>
       <div class="scroll" style="flex:1">
         <div id="xt-json"><div class="empty" id="emptyRes">Press <b>Send</b> to call the API.</div><pre id="resPretty" hidden></pre></div>
@@ -259,14 +273,14 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
     <div class="right-head"><b>Inputs &amp; result</b><button type="button" class="icon-btn" id="closeRight" aria-label="Collapse panel" title="Collapse">⇥</button></div>
     <div class="right-body">
       <div class="section">
-        <div class="section-head"><button type="button" class="collapser" id="inputsToggle" aria-expanded="true"><span class="caret" aria-hidden="true">▾</span><span class="label">Inputs</span></button><button type="button" class="link-btn" id="resetInputs">Reset</button></div>
+        <div class="section-head"><button type="button" class="collapser" id="inputsToggle" aria-expanded="true"><span class="caret" aria-hidden="true">▾</span><span class="label">Inputs</span></button><span class="copybar"><button type="button" class="copy-btn" id="copyInputs">Copy</button><button type="button" class="link-btn" id="resetInputs">Reset</button></span></div>
         <div id="inputsBody">
           <div class="fields" id="form"></div>
           <button type="button" class="btn primary" id="sendBtn2" style="margin-top:14px;width:100%">Send</button>
         </div>
       </div>
       <div class="section" id="resultSection">
-        <div class="section-head"><span class="label">Result</span></div>
+        <div class="section-head"><span class="label">Result</span><button type="button" class="copy-btn" id="copyResult" disabled>Copy</button></div>
         <div id="readable"><p class="hint">Send the request to see the result in plain language.</p></div>
       </div>
     </div>
@@ -550,7 +564,9 @@ function finalRequest(){
   if(body&&!Object.keys(headers).some(k=>k.toLowerCase()==="content-type"))headers["Content-Type"]="application/json";
   return{method:req.method,url:urlIn.value.trim(),headers,body};
 }
+let lastRes=null;
 function resetResponse(){
+  lastRes=null;$("#copyRes").disabled=true;$("#copyResult").disabled=true;
   $("#resStatus").innerHTML="";$("#resMeaning").textContent="";$("#resTime").textContent="";$("#resSize").textContent="";
   $("#emptyRes").hidden=false;$("#emptyRes").innerHTML="Press <b>Send</b> to call the API.";$("#resPretty").hidden=true;$("#resRaw").textContent="";$("#resHeaders").innerHTML="";$("#cResHeaders").textContent="";
   $("#readable").innerHTML=`<p class="hint" style="margin:0">Send the request to see the result in plain language.</p>`;
@@ -577,7 +593,8 @@ async function send(e){
     if(text){$("#emptyRes").hidden=true;$("#resPretty").hidden=false;$("#resPretty").innerHTML=data!==null?hl(JSON.stringify(data,null,2)):esc(text)}
     else{$("#emptyRes").hidden=false;$("#emptyRes").textContent="Empty body. Normal for DELETE and some errors.";$("#resPretty").hidden=true}
     $("#resRaw").textContent=text;
-    const hb=$("#resHeaders");hb.innerHTML="";let n=0;res.headers.forEach((v,k)=>{n++;hb.insertAdjacentHTML("beforeend",`<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`)});$("#cResHeaders").textContent=n||"";
+    const hb=$("#resHeaders");hb.innerHTML="";let n=0;const rh=[];res.headers.forEach((v,k)=>{n++;rh.push([k,v]);hb.insertAdjacentHTML("beforeend",`<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`)});$("#cResHeaders").textContent=n||"";
+    lastRes={ok:true,status:res.status,label:st[0],meaning:st[1],ms,size:fmtSize(new Blob([text]).size),text,data,headers:rh};
     renderReadable(res.status,data,text,st);
   }catch(err){
     const ms=Math.round(performance.now()-t0),timeout=err.name==="AbortError";
@@ -585,11 +602,75 @@ async function send(e){
     const msg=timeout?"The API didn't answer within 30 seconds.":"No usable response. Usually this API doesn't allow calls from a web page (CORS), or a header was refused. Check the URL and your connection.";
     $("#emptyRes").hidden=false;$("#emptyRes").textContent=msg;$("#resPretty").hidden=true;$("#resRaw").textContent="";$("#resHeaders").innerHTML="";$("#cResHeaders").textContent="";
     $("#readable").innerHTML=`<div class="r-error"><b>Call failed</b><p>${esc(msg)}</p></div>`;
-  }finally{clearTimeout(timer);busy=false;showResult();[$("#sendBtn"),$("#sendBtn2")].forEach(b=>{b.disabled=false;b.textContent="Send"})}
+    lastRes={ok:false,status:0,label:"No response",meaning:msg,ms,size:"",text:"",data:null,headers:[]};
+  }finally{clearTimeout(timer);busy=false;$("#copyRes").disabled=!lastRes;$("#copyResult").disabled=!lastRes;showResult();[$("#sendBtn"),$("#sendBtn2")].forEach(b=>{b.disabled=false;b.textContent="Send"})}
 }
 function fmtSize(b){return b<1024?b+" B":b<1048576?(b/1024).toFixed(1)+" KB":(b/1048576).toFixed(2)+" MB"}
 function hl(json){if(json.length>400000)return esc(json);return esc(json).replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,m=>{let c="j-num";if(/^"/.test(m))c=/:$/.test(m)?"j-key":"j-str";else if(/^(true|false)$/.test(m))c="j-bool";else if(m==="null")c="j-null";return`<span class="${c}">${m}</span>`})}
 $("#reqForm").addEventListener("submit",send);$("#sendBtn2").onclick=()=>send();
+
+/* ---------- Copy ---------- */
+const MAX_COPY=20000;
+function secrets(){
+  const out=[];req.params.filter(p=>p.type==="secret"&&String(p.v).trim()).forEach(p=>out.push([String(p.v),"<"+p.k+">"]));
+  const a=req.auth;if(a.type!=="none"&&a.value&&!/\{\w+\}/.test(a.value))out.push([String(a.value),"<token>"]);
+  return out.sort((x,y)=>y[0].length-x[0].length);
+}
+function mask(s){let t=String(s==null?"":s);secrets().forEach(([v,ph])=>{t=t.split(v).join(ph)});return t}
+function cap(s){s=String(s);return s.length>MAX_COPY?s.slice(0,MAX_COPY)+`\n… (cut at ${MAX_COPY.toLocaleString()} of ${s.length.toLocaleString()} characters)`:s}
+function prettyBody(b){if(!b)return"";try{return JSON.stringify(JSON.parse(b),null,2)}catch(_){return b}}
+function requestText(){
+  const r=finalRequest();let t=`${r.method} ${r.url}`;
+  const h=Object.entries(r.headers);if(h.length)t+="\n"+h.map(([k,v])=>`${k}: ${v}`).join("\n");
+  if(r.body)t+="\n\n"+prettyBody(r.body);
+  return mask(t);
+}
+function curlText(){
+  const r=finalRequest(),q=s=>"'"+String(s).replace(/'/g,"'\\''")+"'";
+  let c=`curl -X ${r.method} ${q(r.url)}`;
+  Object.entries(r.headers).forEach(([k,v])=>{c+=` \\\n  -H ${q(k+": "+v)}`});
+  if(r.body)c+=` \\\n  --data ${q(prettyBody(r.body))}`;
+  return mask(c);
+}
+function responseText(){
+  if(!lastRes)return"";
+  const body=lastRes.data!==null&&lastRes.data!==undefined?JSON.stringify(lastRes.data,null,2):lastRes.text;
+  return mask(`${lastRes.status?lastRes.status+" "+lastRes.label:lastRes.label} · ${lastRes.ms} ms${lastRes.size?" · "+lastRes.size:""}\n\n`+cap(body||lastRes.meaning||"(empty body)"));
+}
+function inputsText(){
+  return req.params.filter(p=>p.type!=="hidden"&&p.k).map(p=>`${p.label||humanKey(p.k)}: ${p.type==="secret"?(String(p.v).trim()?"<hidden>":"(empty)"):String(p.v).replace(/\n/g," ")}`).join("\n")||"(no inputs)";
+}
+function resultText(){
+  const box=$("#readable");if(!lastRes)return"";
+  const parts=[];
+  box.querySelectorAll(":scope > *").forEach(el=>{
+    if(el.matches(".r-table")||el.querySelector("table")){el.querySelectorAll("tr").forEach(tr=>parts.push(Array.from(tr.children).map(c=>c.innerText.trim()).join(" | ")))}
+    else if(el.matches(".dl")){const c=Array.from(el.children);for(let i=0;i<c.length;i+=2)parts.push(c[i].innerText.trim()+": "+(c[i+1]?c[i+1].innerText.trim():""))}
+    else if(el.matches(".now")){el.querySelectorAll(".stat-card").forEach(s=>parts.push(s.querySelector("span").innerText.trim()+": "+s.querySelector("b").innerText.trim()))}
+    else{const t=el.innerText.trim();if(t)parts.push(el.matches(".r-title")?"\n"+t.toUpperCase():t)}
+  });
+  return mask(cap(parts.join("\n").trim()));
+}
+function allText(){
+  const fence=(lang,s)=>"```"+lang+"\n"+s+"\n```";
+  let t=`## ${$("#apiName").textContent}\n\n**Inputs**\n${fence("",inputsText())}\n\n**Request**\n${fence("http",requestText())}`;
+  if(lastRes)t+=`\n\n**Response**\n${fence("json",responseText())}\n\n**Result**\n${fence("",resultText())}`;
+  else t+="\n\n_Not sent yet._";
+  return t;
+}
+function copy(btn,text){
+  const label=btn.dataset.label||(btn.dataset.label=btn.textContent);
+  const done=()=>{btn.textContent="Copied ✓";btn.classList.add("done");setTimeout(()=>{btn.textContent=label;btn.classList.remove("done")},1500)};
+  const fallback=()=>{const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");ta.style.cssText="position:fixed;left:-9999px;top:0";document.body.append(ta);ta.select();let ok=false;try{ok=document.execCommand("copy")}catch(_){}ta.remove();if(ok)done();else toast("Couldn't copy. Select the text and press Ctrl/⌘ + C.")};
+  try{if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(done,fallback);else fallback()}catch(_){fallback()}
+}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=msg;document.body.append(t);setTimeout(()=>t.remove(),2500)}
+$("#copyReq").onclick=e=>copy(e.currentTarget,requestText());
+$("#copyCurl").onclick=e=>copy(e.currentTarget,curlText());
+$("#copyRes").onclick=e=>copy(e.currentTarget,responseText());
+$("#copyInputs").onclick=e=>copy(e.currentTarget,inputsText());
+$("#copyResult").onclick=e=>copy(e.currentTarget,resultText());
+$("#copyAll").onclick=e=>copy(e.currentTarget,allText());
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"&&!$("#dlg").open){e.preventDefault();send()}});
 
 /* ---------- Readable result ---------- */
