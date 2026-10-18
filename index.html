@@ -370,6 +370,14 @@ const BUILTIN=[
   {k:"from",in:"path",label:"From (longitude,latitude)",type:"text",v:"-74.01,40.71",hint:"Longitude first. Default: Lower Manhattan"},
   {k:"to",in:"path",label:"To (longitude,latitude)",type:"text",v:"-73.97,40.78",hint:"Default: Central Park"},
   {k:"overview",type:"hidden",v:"false"}]},
+ {id:"photon",group:"Location",name:"Place search (Photon)",method:"GET",url:"https://photon.komoot.io/api/",desc:"Photon: OpenStreetMap search built for type-as-you-go. Finds landmarks, parks, streets. lat/lon ranks nearby places first. Used by Layer Up.",params:[
+  {k:"q",label:"Search",type:"text",v:"Times Square"},
+  {k:"lat",label:"Near latitude",type:"number",v:"40.71",hint:"Optional: bias results toward here"},
+  {k:"lon",label:"Near longitude",type:"number",v:"-74.01"},
+  {k:"limit",label:"Results",type:"select",v:"5",options:["1","3","5","10"]},
+  {k:"lang",type:"hidden",v:"en"}]},
+ {id:"photon-reverse",group:"Location",name:"Name for coordinates (Photon)",method:"GET",url:"https://photon.komoot.io/reverse",desc:"Photon reverse geocoding: coordinates → nearest named place.",params:[
+  {k:"lat",label:"Latitude",type:"number",v:"40.758"},{k:"lon",label:"Longitude",type:"number",v:"-73.9855"},{k:"lang",type:"hidden",v:"en"}]},
  {id:"reverse",group:"Location",name:"Address from coordinates",method:"GET",url:"https://nominatim.openstreetmap.org/reverse",desc:"Nominatim. Max 1 request per second.",params:[
   {k:"lat",label:"Latitude",type:"number",v:"40.71"},{k:"lon",label:"Longitude",type:"number",v:"-74.01"},{k:"format",type:"hidden",v:"json"}]},
  {id:"fx",group:"Money",name:"Exchange rates",method:"GET",url:"https://api.frankfurter.dev/v1/latest",desc:"Frankfurter. European Central Bank reference rates.",params:[
@@ -738,6 +746,15 @@ function renderReadable(status,data,text,st){
     const u=data.usage||{},g=data.usageMetadata||{};
     const inT=u.prompt_tokens??g.promptTokenCount,outT=u.completion_tokens??g.candidatesTokenCount,model=data.model||data.modelVersion||"";
     box.innerHTML=`<div class="r-title">Answer</div><p class="answer">${esc(chatText||gemText)}</p><div class="meta-line">${esc(model)}${inT!=null?` · ${inT} tokens in · ${outT} out`:""}</div>`;return}
+  // GeoJSON places (Photon): one row per place
+  if (data && data.type === "FeatureCollection" && Array.isArray(data.features)) {
+    if (!data.features.length) { box.innerHTML = `<p class="hint">No places found.</p>`; return; }
+    const rows = data.features.map(f => { const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
+      const name = p.name || [p.housenumber, p.street].filter(Boolean).join(" ") || p.city || "";
+      return [name, [p.district || p.locality, p.city, p.countrycode === "US" ? p.state : p.country].filter(Boolean).join(", "), p.osm_value || "", c[1], c[0]]; });
+    box.innerHTML = `<div class="r-table"><table><thead><tr><th>Place</th><th>Area</th><th>Type</th><th>Lat</th><th>Lon</th></tr></thead><tbody>${rows.map(r => `<tr>${r.map(v => `<td>${esc(v ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div><p class="hint">GeoJSON gives coordinates as [lon, lat].</p>`;
+    return;
+  }
   // Route: lead with distance and time
   if(data&&data.routes&&data.routes[0]){const r=data.routes[0];box.innerHTML=`<div class="now"><div class="stat-card"><span>Distance</span><b>${fmtVal(r.distance,null,"distance")}</b></div><div class="stat-card"><span>Drive time</span><b>${fmtVal(r.duration,null,"duration")}</b></div></div><p class="hint">Without live traffic.</p>`;return}
   // Exchange rates: one line per currency

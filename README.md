@@ -16,7 +16,7 @@ A lightweight, single-file API testing tool that runs in the browser. Pick a pre
 |---|---|---|
 | Gen AI | Gemini, Groq, OpenRouter, Hugging Face (chat + list models) | Free key per provider, stored only in your browser |
 | Weather | Open-Meteo forecast and geocoding | No |
-| Location | OSRM routing, Nominatim reverse geocoding | No |
+| Location | Photon place search + reverse, OSRM routing, Nominatim reverse geocoding | No |
 | Money | Frankfurter exchange rates, CoinGecko crypto prices | No |
 | Knowledge | REST Countries, Wikipedia summary, Countries GraphQL | No |
 | Practice | JSONPlaceholder (GET / POST / PUT / DELETE), httpbin echo and error codes | No |
