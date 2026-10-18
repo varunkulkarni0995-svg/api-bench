@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: three panes — API list | request + raw response | inputs form + readable result (collapsible) */
+:root{
+  --bg:#eef1f4;--panel:#ffffff;--sunk:#f5f7f9;--ink:#17212b;--muted:#5a6775;--line:#d9dee4;
+  --accent:#0f766e;--accent-ink:#ffffff;--accent-soft:#e3f2f0;
+  --get:#18794e;--post:#b45309;--put:#1d4ed8;--patch:#7c3aed;--del:#b91c1c;
+  --j-key:#1e4fa8;--j-str:#1b7340;--j-num:#a14a0a;--j-bool:#7c3aed;--j-null:#6b7280;
+  --ok:#18794e;--warn:#a16207;--bad:#b91c1c;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f151b;--panel:#161f28;--sunk:#111920;--ink:#e4eaf0;--muted:#94a2b0;--line:#283440;
+  --accent:#3cbfb2;--accent-ink:#06201d;--accent-soft:#16312f;
+  --get:#4ccf8a;--post:#f0a04b;--put:#7aa2ff;--patch:#b794ff;--del:#ff7b72;
+  --j-key:#8ab4ff;--j-str:#7fd6a0;--j-num:#f2b26b;--j-bool:#c4a7ff;--j-null:#8b97a3;
+  --ok:#4ccf8a;--warn:#e8c25a;--bad:#ff7b72;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b;--panel:#161f28;--sunk:#111920;--ink:#e4eaf0;--muted:#94a2b0;--line:#283440;
+  --accent:#3cbfb2;--accent-ink:#06201d;--accent-soft:#16312f;
+  --get:#4ccf8a;--post:#f0a04b;--put:#7aa2ff;--patch:#b794ff;--del:#ff7b72;
+  --j-key:#8ab4ff;--j-str:#7fd6a0;--j-num:#f2b26b;--j-bool:#c4a7ff;--j-null:#8b97a3;
+  --ok:#4ccf8a;--warn:#e8c25a;--bad:#ff7b72;color-scheme:dark}
+
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--font-ui);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=number],select,textarea{background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:7px 10px;width:100%}
+textarea{font-family:var(--font-mono);font-size:12.5px;resize:vertical;min-height:150px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:7px 14px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);padding-inline:22px}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.primary:disabled{opacity:.7;cursor:wait}
+.btn.small{padding:4px 10px;font-size:12.5px}
+.icon-btn{border:0;background:none;cursor:pointer;color:var(--muted);width:28px;height:28px;border-radius:6px;flex:none;display:inline-grid;place-items:center;font-size:15px;line-height:1}
+.icon-btn:hover{background:var(--sunk);color:var(--ink)}
+.label{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.hint{font-size:12.5px;color:var(--muted);margin:4px 0 0}
+.mono{font-family:var(--font-mono)}
+.m{font-family:var(--font-mono);font-size:11px;font-weight:500;width:44px;flex:none}
+.m-GET{color:var(--get)}.m-POST{color:var(--post)}.m-PUT{color:var(--put)}.m-PATCH{color:var(--patch)}.m-DELETE{color:var(--del)}
+
+/* App grid */
+.app{display:grid;grid-template-columns:250px minmax(0,1fr) 380px;height:100vh}
+.app.right-closed{grid-template-columns:250px minmax(0,1fr) 0}
+.app.right-closed .right{display:none}
+
+/* Left */
+.left{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.brand{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px}
+.brand b{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.left .add{margin:0 12px 8px}
+.list{flex:1;overflow:auto;padding:0 8px 16px}
+.group-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:12px 8px 3px;font-weight:600}
+.item{display:flex;align-items:center;border-radius:7px}
+.item:hover{background:var(--sunk)}
+.item.active{background:var(--accent-soft)}
+.item>button.open{flex:1;min-width:0;display:flex;align-items:center;gap:6px;border:0;background:none;text-align:left;padding:6px 8px;cursor:pointer}
+.item .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .icon-btn{visibility:hidden;width:24px;height:24px}
+.item:hover .icon-btn,.item.active .icon-btn{visibility:visible}
+
+/* Middle */
+.mid{display:flex;flex-direction:column;min-width:0;min-height:0;padding:14px 16px;gap:12px}
+.mid-head{display:flex;align-items:flex-start;gap:12px}
+.mid-head h1{margin:0;font-size:18px;letter-spacing:-.01em;text-wrap:balance}
+.mid-head p{margin:2px 0 0;color:var(--muted);font-size:13px;max-width:80ch}
+.mid-head .spacer{flex:1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
+.req{display:flex;flex-direction:column;max-height:46vh;min-height:0;flex:none}
+.reqbar{display:flex;gap:8px;padding:10px}
+.reqbar select{width:104px;flex:none;font-family:var(--font-mono);font-weight:500}
+.reqbar input{flex:1;min-width:0;font-family:var(--font-mono);font-size:12.5px}
+select[data-method="GET"]{color:var(--get)}select[data-method="POST"]{color:var(--post)}select[data-method="PUT"]{color:var(--put)}select[data-method="PATCH"]{color:var(--patch)}select[data-method="DELETE"]{color:var(--del)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 8px;flex:none}
+.tabs button{border:0;background:none;padding:8px 10px;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:2px solid transparent;display:inline-flex;gap:6px;align-items:center}
+.tabs button:focus-visible{outline-offset:-3px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.count{font-family:var(--font-mono);font-size:11px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;padding:0 6px;color:var(--muted)}
+.count:empty{display:none}
+.scroll{overflow:auto;min-height:0}
+.pane{padding:10px 12px}
+.kv{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.kv-head,.kv-row{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(0,1.7fr) 34px}
+.kv-head{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--sunk);font-weight:600}
+.kv-head span{padding:5px 10px}
+.kv-row{border-top:1px solid var(--line)}
+.kv-row input[type=checkbox]{margin:auto;width:15px;height:15px;accent-color:var(--accent)}
+.kv-row input[type=text]{font-family:var(--font-mono);font-size:12.5px;padding:6px 10px;background:transparent;border:0;border-left:1px solid var(--line);border-radius:0}
+.kv-row input[type=text]:focus{background:var(--sunk);outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
+.kv-row .icon-btn{width:34px;height:auto;border-radius:0;border-left:1px solid var(--line)}
+.kv-row.off input[type=text]{color:var(--muted);text-decoration:line-through}
+.link-btn{border:0;background:none;color:var(--accent);font-weight:500;cursor:pointer;padding:2px 0;font-size:13px}
+.link-btn:hover{text-decoration:underline}
+.blocked{border:1px dashed var(--line);border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.blocked p{margin:0}
+.res{flex:1;display:flex;flex-direction:column;min-height:0}
+.resbar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
+.pill{font-family:var(--font-mono);font-weight:500;font-size:12.5px;padding:2px 9px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.s2{color:var(--ok)}.s3{color:var(--warn)}.s4,.s5,.s0{color:var(--bad)}
+.stat{font-family:var(--font-mono);font-size:12.5px;color:var(--muted)}
+.grow{flex:1}
+pre{margin:0;padding:12px;font:12.5px/1.55 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+.j-key{color:var(--j-key)}.j-str{color:var(--j-str)}.j-num{color:var(--j-num)}.j-bool{color:var(--j-bool)}.j-null{color:var(--j-null)}
+.empty{padding:28px 16px;color:var(--muted);text-align:center;max-width:54ch;margin:0 auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+
+/* Right */
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0}
+.right-head{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 10px 16px;border-bottom:1px solid var(--line)}
+.right-head b{font-size:14px}
+.right-body{flex:1;overflow:auto;min-height:0}
+.section{padding:14px 16px;border-bottom:1px solid var(--line)}
+.section:last-child{border-bottom:0}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.fields{display:grid;gap:12px}
+.collapser{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;cursor:pointer}
+.caret{font-size:11px;color:var(--muted);transition:transform .15s}
+.collapser[aria-expanded="false"] .caret{transform:rotate(-90deg)}
+@media (prefers-reduced-motion:reduce){.caret{transition:none}}
+.field{display:grid;gap:4px}
+.field>label,.field>.flabel{font-size:12.5px;font-weight:600}
+.field .hint{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 8px;cursor:pointer;font-size:12.5px;user-select:none}
+.chip input{accent-color:var(--accent);margin:0}
+.chip:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.toggle input{accent-color:var(--accent);width:16px;height:16px}
+
+/* Readable result */
+.r-error{border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:10px 12px;font-size:13.5px}
+.r-error p{margin:4px 0 0;color:var(--ink)}
+.now{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.stat-card{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.stat-card span{display:block;font-size:11.5px;color:var(--muted)}
+.stat-card b{font-size:18px;font-variant-numeric:tabular-nums}
+.r-title{font-size:12px;color:var(--muted);margin:12px 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.r-title:first-child{margin-top:0}
+.dl{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.dl>div{padding:6px 10px;border-top:1px solid var(--line);font-size:13px;overflow-wrap:anywhere}
+.dl>div:nth-child(-n+2){border-top:0}
+.dl>.k{color:var(--muted);background:var(--sunk)}
+.r-table{border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:420px}
+.r-table table{font-size:12.5px}
+.r-table td{font-variant-numeric:tabular-nums;white-space:nowrap}
+.r-table thead th{position:sticky;top:0;background:var(--sunk);text-transform:none;letter-spacing:0;font-size:11.5px}
+.r-table tr.cur td{background:var(--accent-soft);font-weight:600}
+.r-text{font-size:13.5px;margin:0}
+.big{font-size:22px;font-weight:600}
+
+/* Add API dialog */
+dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(720px,94vw);background:var(--panel);color:var(--ink)}
+dialog::backdrop{background:rgba(10,15,20,.45)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.dlg-head h2{margin:0;font-size:16px}
+.dlg-body{padding:14px 18px;display:grid;gap:12px;max-height:70vh;overflow:auto}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+.prow{display:grid;grid-template-columns:1fr 1fr 110px 1fr 1.2fr 28px;gap:6px;align-items:center}
+.prow.head{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.prow input,.prow select{padding:5px 8px;font-size:12.5px}
+.dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- LEFT: API list -->
+  <aside class="left">
+    <div class="brand"><b>API Bench</b></div>
+    <button type="button" class="btn add" id="addBtn">+ Add API</button>
+    <nav class="list" id="apiList" aria-label="APIs"></nav>
+  </aside>
+
+  <!-- MIDDLE: request + raw response -->
+  <main class="mid">
+    <div class="mid-head">
+      <div><h1 id="apiName">API</h1><p id="apiDesc"></p></div>
+      <span class="spacer"></span>
+      <button type="button" class="btn small" id="openRight" hidden>Show inputs &amp; result</button>
+    </div>
+
+    <section class="card req" aria-label="Request">
+      <form class="reqbar" id="reqForm">
+        <select id="method" aria-label="HTTP method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+        <input type="text" id="url" aria-label="Request URL" spellcheck="false" autocomplete="off">
+        <button type="submit" class="btn primary" id="sendBtn" title="Send (Ctrl/⌘ + Enter)">Send</button>
+      </form>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-rtab="params">Params <span class="count" id="cParams"></span></button>
+        <button type="button" role="tab" aria-selected="false" data-rtab="headers">Headers <span class="count" id="cHeaders"></span></button>
+        <button type="button" role="tab" aria-selected="false" data-rtab="body">Body <span class="count" id="cBody"></span></button>
+        <button type="button" role="tab" aria-selected="false" data-rtab="auth">Auth <span class="count" id="cAuth"></span></button>
+      </div>
+      <div class="scroll">
+        <div class="pane" id="rt-params"><p class="hint" id="paramsEmpty" style="margin:0 0 8px">No query params.</p><div id="paramsKV"></div></div>
+        <div class="pane" id="rt-headers" hidden><p class="hint" id="hdrEmpty" style="margin:0 0 8px">No headers. Most public GET APIs don't need any.</p><div id="headersKV"></div></div>
+        <div class="pane" id="rt-body" hidden>
+          <div class="blocked" id="bodyBlocked"><p><b id="bodyBlockedTitle">GET requests have no body.</b> Inputs go in Params.</p><button type="button" class="btn small" id="toPost">Switch to POST</button></div>
+          <div id="bodyEditor"><textarea id="body" spellcheck="false" aria-label="Request body (JSON)"></textarea>
+            <p class="hint" id="bodyHint">JSON. Content-Type: application/json is added automatically.</p></div>
+        </div>
+        <div class="pane" id="rt-auth" hidden>
+          <div class="row">
+            <div class="field"><label for="authType">Type</label><select id="authType"><option value="none">No auth</option><option value="bearer">Bearer token</option><option value="apikey">API key (header)</option></select></div>
+            <div class="field" id="authKeyWrap" hidden><label for="authKey">Header name</label><input type="text" id="authKey" value="x-api-key"></div>
+            <div class="field" id="authValWrap" hidden><label for="authVal">Token / key</label><input type="text" id="authVal"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card res" aria-label="Response">
+      <div class="resbar">
+        <span class="label">Response</span>
+        <span id="resStatus"></span><span id="resMeaning" style="font-size:13px"></span>
+        <span class="grow"></span>
+        <span class="stat" id="resTime"></span><span class="stat" id="resSize"></span>
+      </div>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-xtab="json">JSON</button>
+        <button type="button" role="tab" aria-selected="false" data-xtab="raw">Raw</button>
+        <button type="button" role="tab" aria-selected="false" data-xtab="rheaders">Headers <span class="count" id="cResHeaders"></span></button>
+      </div>
+      <div class="scroll" style="flex:1">
+        <div id="xt-json"><div class="empty" id="emptyRes">Press <b>Send</b> to call the API.</div><pre id="resPretty" hidden></pre></div>
+        <div id="xt-raw" hidden><pre id="resRaw"></pre></div>
+        <div id="xt-rheaders" hidden><table><thead><tr><th>Header</th><th>Value</th></tr></thead><tbody id="resHeaders"></tbody></table>
+          <p class="hint" style="margin:10px 12px">Browsers only see the headers an API chooses to share.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- RIGHT: inputs form + readable result -->
+  <aside class="right" id="right" aria-label="Inputs and result">
+    <div class="right-head"><b>Inputs &amp; result</b><button type="button" class="icon-btn" id="closeRight" aria-label="Collapse panel" title="Collapse">⇥</button></div>
+    <div class="right-body">
+      <div class="section">
+        <div class="section-head"><button type="button" class="collapser" id="inputsToggle" aria-expanded="true"><span class="caret" aria-hidden="true">▾</span><span class="label">Inputs</span></button><button type="button" class="link-btn" id="resetInputs">Reset</button></div>
+        <div id="inputsBody">
+          <div class="fields" id="form"></div>
+          <button type="button" class="btn primary" id="sendBtn2" style="margin-top:14px;width:100%">Send</button>
+        </div>
+      </div>
+      <div class="section" id="resultSection">
+        <div class="section-head"><span class="label">Result</span></div>
+        <div id="readable"><p class="hint">Send the request to see the result in plain language.</p></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Add / edit API -->
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <form method="dialog" id="dlgForm">
+    <div class="dlg-head"><h2 id="dlgTitle">Add API</h2><button type="button" class="icon-btn" id="dlgClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <div class="row">
+        <div class="field"><label for="dName">Name</label><input type="text" id="dName" placeholder="e.g. Air quality"></div>
+        <div class="field" style="flex:0 0 120px"><label for="dMethod">Method</label><select id="dMethod"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></div>
+      </div>
+      <div class="field"><label for="dUrl">URL</label><input type="text" id="dUrl" class="mono" placeholder="https://api.example.com/v1/items/{id}?city=NYC" spellcheck="false">
+        <p class="hint">Write path inputs as <code>{name}</code>. Query params after <code>?</code> are picked up automatically.</p></div>
+      <div class="field"><label for="dDesc">Description (optional)</label><input type="text" id="dDesc"></div>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="flabel">Inputs</span><button type="button" class="link-btn" id="dDetect">Detect from URL</button></div>
+        <div class="prow head"><span>Param</span><span>Label</span><span>Type</span><span>Default</span><span>Options (comma)</span><span></span></div>
+        <div id="dParams" style="display:grid;gap:6px"></div>
+        <button type="button" class="link-btn" id="dAddParam" style="justify-self:start">+ Add input</button>
+      </div>
+      <div class="field"><label for="dBody">Body (optional, for POST/PUT)</label><textarea id="dBody" style="min-height:90px" placeholder='{ "title": "{title}" }'></textarea>
+        <p class="hint">Use <code>{name}</code> to fill a value from Inputs.</p></div>
+      <p class="hint" id="dErr" style="color:var(--bad)"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" id="dCancel">Cancel</button><button type="button" class="btn primary" id="dSave">Save API</button></div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const attr=s=>esc(s).replace(/"/g,"&quot;");
+const clone=o=>JSON.parse(JSON.stringify(o));
+const CT={k:"Content-Type",v:"application/json",on:true};
+const JP="https://jsonplaceholder.typicode.com";
+
+/* ---------- Pre-configured APIs ---------- */
+const BUILTIN=[
+ {id:"forecast",group:"Weather",name:"Hourly forecast",method:"GET",url:"https://api.open-meteo.com/v1/forecast",desc:"Open-Meteo. Hourly weather for any location. No key.",params:[
+  {k:"latitude",label:"Latitude",type:"number",v:"40.71",hint:"NYC ≈ 40.71"},
+  {k:"longitude",label:"Longitude",type:"number",v:"-74.01",hint:"NYC ≈ -74.01"},
+  {k:"hourly",label:"What to show",type:"multi",v:"temperature_2m,apparent_temperature,precipitation_probability,wind_speed_10m",options:[["temperature_2m","Temperature"],["apparent_temperature","Feels like"],["precipitation_probability","Rain chance"],["wind_speed_10m","Wind"],["relative_humidity_2m","Humidity"],["uv_index","UV index"]]},
+  {k:"forecast_days",label:"Days",type:"select",v:"1",options:[["1","Today"],["2","2 days"],["3","3 days"],["7","7 days"]]},
+  {k:"timezone",label:"Timezone",type:"select",v:"America/New_York",options:[["America/New_York","New York"],["America/Los_Angeles","San Francisco"],["Asia/Kolkata","India"],["Europe/London","London"],["auto","From location"]]}]},
+ {id:"geocode",group:"Weather",name:"Find a place",method:"GET",url:"https://geocoding-api.open-meteo.com/v1/search",desc:"Place name → coordinates. Use them in Hourly forecast.",params:[
+  {k:"name",label:"Place",type:"text",v:"Brooklyn"},
+  {k:"count",label:"Results",type:"select",v:"3",options:["1","3","5","10"]}]},
+ {id:"route",group:"Location",name:"Route by car",method:"GET",url:"https://router.project-osrm.org/route/v1/driving/{from};{to}",desc:"OSRM. Driving distance and time between two points.",params:[
+  {k:"from",in:"path",label:"From (longitude,latitude)",type:"text",v:"-74.01,40.71",hint:"Longitude first. Default: Lower Manhattan"},
+  {k:"to",in:"path",label:"To (longitude,latitude)",type:"text",v:"-73.97,40.78",hint:"Default: Central Park"},
+  {k:"overview",type:"hidden",v:"false"}]},
+ {id:"reverse",group:"Location",name:"Address from coordinates",method:"GET",url:"https://nominatim.openstreetmap.org/reverse",desc:"Nominatim. Max 1 request per second.",params:[
+  {k:"lat",label:"Latitude",type:"number",v:"40.71"},{k:"lon",label:"Longitude",type:"number",v:"-74.01"},{k:"format",type:"hidden",v:"json"}]},
+ {id:"fx",group:"Money",name:"Exchange rates",method:"GET",url:"https://api.frankfurter.dev/v1/latest",desc:"Frankfurter. European Central Bank reference rates.",params:[
+  {k:"amount",label:"Amount",type:"number",v:"1"},
+  {k:"from",label:"From",type:"select",v:"USD",options:["USD","EUR","GBP","INR","JPY"]},
+  {k:"to",label:"To",type:"multi",v:"INR,EUR,GBP",options:["INR","EUR","GBP","USD","JPY","CAD","AUD"]}]},
+ {id:"crypto",group:"Money",name:"Crypto prices",method:"GET",url:"https://api.coingecko.com/api/v3/simple/price",desc:"CoinGecko public endpoint. Rate-limited.",params:[
+  {k:"ids",label:"Coins",type:"multi",v:"bitcoin,ethereum",options:[["bitcoin","Bitcoin"],["ethereum","Ethereum"],["solana","Solana"],["dogecoin","Dogecoin"]]},
+  {k:"vs_currencies",label:"Currency",type:"select",v:"usd",options:[["usd","USD"],["inr","INR"],["eur","EUR"]]}]},
+ {id:"country",group:"Knowledge",name:"Country facts",method:"GET",url:"https://restcountries.com/v3.1/name/{country}",desc:"REST Countries.",params:[
+  {k:"country",in:"path",label:"Country",type:"text",v:"india"},{k:"fields",type:"hidden",v:"name,capital,region,population,currencies"}]},
+ {id:"wiki",group:"Knowledge",name:"Wikipedia summary",method:"GET",url:"https://en.wikipedia.org/api/rest_v1/page/summary/{title}",desc:"Short summary of any Wikipedia article.",params:[
+  {k:"title",in:"path",label:"Article",type:"text",v:"New_York_City",hint:"Use underscores for spaces"}]},
+ {id:"graphql",group:"Knowledge",name:"GraphQL: country",method:"POST",url:"https://countries.trevorblades.com/",desc:"GraphQL: one URL, always POST. The query in the Body names the fields you want.",headers:[CT],
+  body:'{\n  "query": "{ country(code: \\"{code}\\") { name capital currency languages { name } } }"\n}',params:[
+  {k:"code",in:"body",label:"Country",type:"select",v:"IN",options:[["IN","India"],["US","United States"],["GB","United Kingdom"],["JP","Japan"],["BR","Brazil"]]}]},
+ {id:"list",group:"Practice",name:"List posts",method:"GET",url:JP+"/posts",desc:"JSONPlaceholder: fake API for practice. Nothing is really saved.",params:[{k:"userId",label:"User",type:"select",v:"1",options:["1","2","3"]}]},
+ {id:"read",group:"Practice",name:"Read a post",method:"GET",url:JP+"/posts/{id}",desc:"GET one record by id.",params:[{k:"id",in:"path",label:"Post id",type:"number",v:"1"}]},
+ {id:"create",group:"Practice",name:"Create a post",method:"POST",url:JP+"/posts",desc:"POST creates a record. Expect 201 Created.",headers:[CT],
+  body:'{\n  "title": "{title}",\n  "body": "{text}",\n  "userId": 1\n}',params:[{k:"title",in:"body",label:"Title",type:"text",v:"Hello"},{k:"text",in:"body",label:"Text",type:"text",v:"My first POST"}]},
+ {id:"update",group:"Practice",name:"Update a post",method:"PUT",url:JP+"/posts/{id}",desc:"PUT replaces the whole record.",headers:[CT],
+  body:'{\n  "id": {id},\n  "title": "{title}",\n  "body": "Updated",\n  "userId": 1\n}',params:[{k:"id",in:"path",label:"Post id",type:"number",v:"1"},{k:"title",in:"body",label:"New title",type:"text",v:"Edited title"}]},
+ {id:"delete",group:"Practice",name:"Delete a post",method:"DELETE",url:JP+"/posts/{id}",desc:"DELETE removes a record. Expect 200 with an empty body.",params:[{k:"id",in:"path",label:"Post id",type:"number",v:"1"}]},
+ {id:"echo",group:"Practice",name:"Echo my request",method:"GET",url:"https://httpbin.org/anything",desc:"httpbin echoes back what it received, including your auth header.",auth:{type:"bearer",value:"demo-token-123"},params:[{k:"hello",label:"Any value",type:"text",v:"world"}]},
+ {id:"status",group:"Practice",name:"Simulate an error",method:"GET",url:"https://httpbin.org/status/{code}",desc:"Forces a status code so you can see how errors look.",params:[{k:"code",in:"path",label:"Status code",type:"select",v:"429",options:[["200","200 OK"],["400","400 Bad request"],["401","401 Unauthorized"],["404","404 Not found"],["429","429 Too many requests"],["500","500 Server error"],["503","503 Unavailable"]]}]}
+];
+let custom=store.get("apibench.custom",[]);
+const allApis=()=>BUILTIN.concat(custom);
+
+const STATUS={200:["OK","Worked."],201:["Created","A new record was created."],204:["No Content","Worked, nothing to return."],301:["Moved","Moved to a new URL."],304:["Not Modified","Use your cached copy."],400:["Bad Request","The request is malformed: check the inputs."],401:["Unauthorized","Missing or invalid key/token."],403:["Forbidden","Not allowed to do this."],404:["Not Found","Wrong URL or the record doesn't exist."],405:["Method Not Allowed","This URL doesn't accept this method."],409:["Conflict","Clashes with existing data."],422:["Unprocessable","Format is fine, values are invalid."],429:["Too Many Requests","Rate limit hit. Wait and retry."],500:["Server Error","The API failed. Not your fault; retry later."],502:["Bad Gateway","A server upstream failed."],503:["Unavailable","Down or overloaded. Retry later."],504:["Gateway Timeout","An upstream server took too long."]};
+
+/* ---------- State ---------- */
+let req=null,activeId=null;
+function fromApi(a){
+  const r={id:a.id,method:a.method||"GET",base:a.url.split("?")[0],bodyTpl:a.body||"",body:"",headers:clone(a.headers||[]),auth:clone(a.auth||{type:"none"}),params:[]};
+  const defined=(a.params||[]).map(p=>Object.assign({in:"query",type:"text",on:true},clone(p)));
+  const inUrl=parseQuery(a.url).filter(q=>!defined.some(p=>p.k===q.k)).map(q=>({k:q.k,v:q.v,in:"query",type:"text",on:true}));
+  r.params=defined.concat(inUrl);r.defaults=clone(r.params);return r;
+}
+
+/* ---------- URL & body building ---------- */
+function dec(s){try{return decodeURIComponent(s.replace(/\+/g," "))}catch(e){return s}}
+function enc(s){return encodeURIComponent(s).replace(/%2C/gi,",").replace(/%3A/gi,":").replace(/%3B/gi,";").replace(/%2F/gi,"/")}
+function parseQuery(url){const i=url.indexOf("?");if(i<0)return[];return url.slice(i+1).split("&").filter(Boolean).map(p=>{const j=p.indexOf("=");return j<0?{k:dec(p),v:""}:{k:dec(p.slice(0,j)),v:dec(p.slice(j+1))}})}
+function fill(tpl,where,escape){let out=tpl;req.params.filter(p=>where.includes(p.in)).forEach(p=>{out=out.split("{"+p.k+"}").join(escape(String(p.v)))});return out}
+function resolvedUrl(){
+  const base=fill(req.base,["path"],v=>enc(v));
+  const q=req.params.filter(p=>p.in==="query"&&p.on!==false&&p.k).map(p=>enc(p.k)+"="+enc(p.v)).join("&");
+  return q?base+"?"+q:base;
+}
+function resolvedBody(){return req.bodyTpl?fill(req.bodyTpl,["body","path"],v=>JSON.stringify(v).slice(1,-1)):req.body}
+
+/* ---------- Render: left list ---------- */
+function renderList(){
+  const box=$("#apiList");box.innerHTML="";let g="";
+  const groups=custom.length?[{n:"My APIs",items:custom}]:[];
+  BUILTIN.forEach(a=>{let grp=groups.find(x=>x.n===a.group);if(!grp){grp={n:a.group,items:[]};groups.push(grp)}grp.items.push(a)});
+  groups.forEach(grp=>{
+    box.insertAdjacentHTML("beforeend",`<div class="group-label">${esc(grp.n)}</div>`);
+    grp.items.forEach(a=>{
+      const it=document.createElement("div");it.className="item"+(a.id===activeId?" active":"");
+      it.innerHTML=`<button type="button" class="open"><span class="m m-${a.method}">${a.method}</span><span class="name">${esc(a.name)}</span></button>`;
+      it.querySelector(".open").onclick=()=>select(a.id);
+      if(grp.n==="My APIs"){
+        const ed=document.createElement("button");ed.type="button";ed.className="icon-btn";ed.textContent="✎";ed.title="Edit";ed.setAttribute("aria-label","Edit "+a.name);ed.onclick=()=>openDialog(a);
+        const del=document.createElement("button");del.type="button";del.className="icon-btn";del.textContent="✕";del.title="Delete";del.setAttribute("aria-label","Delete "+a.name);
+        del.onclick=()=>{if(del.dataset.armed){custom=custom.filter(x=>x.id!==a.id);store.set("apibench.custom",custom);if(activeId===a.id)select(BUILTIN[0].id);else renderList()}else{del.dataset.armed="1";del.textContent="Delete?";del.style.width="auto";del.style.color="var(--bad)";setTimeout(()=>{if(del.isConnected){delete del.dataset.armed;del.textContent="✕";del.style.width="";del.style.color=""}},2500)}};
+        it.append(ed,del);
+      }
+      box.append(it);
+    });
+  });
+}
+
+/* ---------- Render: middle request ---------- */
+const urlIn=$("#url"),methodSel=$("#method");
+function syncUrl(){urlIn.value=resolvedUrl();if(req.bodyTpl)$("#body").value=resolvedBody();updateCounts()}
+function updateCounts(){
+  const q=req.params.filter(p=>p.in==="query"),h=req.headers;
+  $("#cParams").textContent=q.filter(p=>p.on!==false&&p.k).length||"";
+  $("#cHeaders").textContent=h.filter(x=>x.on!==false&&x.k).length||"";
+  $("#cBody").textContent=(!["GET","DELETE"].includes(req.method)&&resolvedBody().trim())?"JSON":"";
+  $("#cAuth").textContent=req.auth.type!=="none"?"on":"";
+  $("#paramsEmpty").hidden=q.length>0;$("#hdrEmpty").hidden=h.length>0;
+}
+function renderKV(el,rows,onChange,ph,newRow){
+  el.innerHTML="";
+  if(rows.length){
+    const box=document.createElement("div");box.className="kv";
+    box.innerHTML=`<div class="kv-head"><span></span><span>${ph[0]}</span><span>${ph[1]}</span><span></span></div>`;
+    rows.forEach(r=>{
+      const row=document.createElement("div");row.className="kv-row"+(r.on===false?" off":"");
+      row.innerHTML=`<input type="checkbox" aria-label="Include"${r.on===false?"":" checked"}><input type="text" aria-label="${ph[0]}" spellcheck="false"><input type="text" aria-label="${ph[1]}" spellcheck="false"><button type="button" class="icon-btn" aria-label="Remove">✕</button>`;
+      const [cb,k,v]=row.querySelectorAll("input");k.value=r.k;v.value=r.v;
+      cb.onchange=()=>{r.on=cb.checked;row.classList.toggle("off",!cb.checked);onChange()};
+      k.oninput=()=>{r.k=k.value;onChange()};v.oninput=()=>{r.v=v.value;onChange(r)};
+      row.querySelector("button").onclick=()=>{rows.splice(rows.indexOf(r),1);renderKV(el,rows,onChange,ph,newRow);onChange()};
+      box.append(row);
+    });
+    el.append(box);
+  }
+  const add=document.createElement("button");add.type="button";add.className="link-btn";add.textContent="+ Add "+ph[0].toLowerCase();
+  add.onclick=()=>{rows.push(newRow());renderKV(el,rows,onChange,ph,newRow);onChange();const ins=el.querySelectorAll(".kv-row input[type=text]");if(ins.length)ins[ins.length-2].focus()};
+  el.append(add);
+}
+function renderParamsKV(){
+  const q=req.params.filter(p=>p.in==="query");
+  renderKV($("#paramsKV"),q,(changed)=>{req.params=req.params.filter(p=>p.in!=="query").concat(q);syncUrl();if(changed)syncFormField(changed);else renderForm()},["Param","Value"],()=>({k:"",v:"",in:"query",type:"text",on:true}));
+}
+function renderHeadersKV(){renderKV($("#headersKV"),req.headers,()=>updateCounts(),["Header","Value"],()=>({k:"",v:"",on:true}))}
+function renderBodyPane(){
+  const none=["GET","DELETE"].includes(req.method)&&!resolvedBody().trim();
+  $("#bodyBlocked").hidden=!none;$("#bodyEditor").hidden=none;
+  $("#bodyBlockedTitle").textContent=req.method+" requests usually have no body.";
+  $("#body").value=resolvedBody();
+  $("#bodyHint").textContent=req.bodyTpl?"Filled from Inputs on the right. Editing here unlinks it.":"JSON. Content-Type: application/json is added automatically.";
+}
+function renderAuth(){
+  $("#authType").value=req.auth.type;$("#authVal").value=req.auth.value||"";$("#authKey").value=req.auth.key||"x-api-key";
+  $("#authValWrap").hidden=req.auth.type==="none";$("#authKeyWrap").hidden=req.auth.type!=="apikey";
+}
+function selectTab(attrName,prefix,key){$$(`[data-${attrName}]`).forEach(x=>{x.setAttribute("aria-selected",String(x.dataset[attrName]===key));$("#"+prefix+x.dataset[attrName]).hidden=x.dataset[attrName]!==key})}
+$$("[data-rtab]").forEach(b=>b.onclick=()=>selectTab("rtab","rt-",b.dataset.rtab));
+$$("[data-xtab]").forEach(b=>b.onclick=()=>selectTab("xtab","xt-",b.dataset.xtab));
+
+/* ---------- Render: right form ---------- */
+function optList(o){return(o||[]).map(x=>Array.isArray(x)?x:[x,x])}
+function renderForm(){
+  const box=$("#form");box.innerHTML="";
+  const visible=req.params.filter(p=>p.type!=="hidden"&&p.k);
+  if(!visible.length){box.innerHTML=`<p class="hint" style="margin:0">This API has no inputs.</p>`;return}
+  visible.forEach(p=>{
+    const id="f_"+p.in+"_"+p.k.replace(/\W/g,"_"),label=esc(p.label||humanKey(p.k));
+    const wrap=document.createElement("div");wrap.className="field";wrap.dataset.key=p.in+":"+p.k;
+    let html="";
+    if(p.type==="select"){html=`<label for="${id}">${label}</label><select id="${id}">${optList(p.options).map(([v,l])=>`<option value="${attr(v)}"${String(v)===String(p.v)?" selected":""}>${esc(l)}</option>`).join("")}</select>`}
+    else if(p.type==="multi"){const sel=String(p.v).split(",").filter(Boolean);html=`<span class="flabel">${label}</span><div class="chips">${optList(p.options).map(([v,l])=>`<label class="chip"><input type="checkbox" value="${attr(v)}"${sel.includes(String(v))?" checked":""}>${esc(l)}</label>`).join("")}</div>`}
+    else if(p.type==="toggle"){html=`<label class="toggle"><input type="checkbox" id="${id}"${String(p.v)==="true"?" checked":""}>${label}</label>`}
+    else{html=`<label for="${id}">${label}</label><input type="${p.type==="number"?"number":"text"}" step="any" id="${id}" value="${attr(p.v)}" spellcheck="false">`}
+    if(p.hint)html+=`<p class="hint">${esc(p.hint)}</p>`;
+    wrap.innerHTML=html;
+    if(p.type==="multi")wrap.querySelectorAll("input").forEach(cb=>cb.onchange=()=>{p.v=Array.from(wrap.querySelectorAll("input:checked")).map(x=>x.value).join(",");onFormChange()});
+    else if(p.type==="toggle")wrap.querySelector("input").onchange=e=>{p.v=String(e.target.checked);onFormChange()};
+    else{const el=wrap.querySelector("input,select");el.addEventListener(p.type==="select"?"change":"input",()=>{p.v=el.value;onFormChange()})}
+    box.append(wrap);
+  });
+}
+function syncFormField(p){const w=$(`#form [data-key="${CSS.escape(p.in+":"+p.k)}"] input:not([type=checkbox]), #form [data-key="${CSS.escape(p.in+":"+p.k)}"] select`);if(w)w.value=p.v;else renderForm()}
+function onFormChange(){syncUrl();renderParamsKV();renderBodyPane()}
+function humanKey(k){const M={temperature_2m:"Temperature",apparent_temperature:"Feels like",precipitation_probability:"Rain chance",wind_speed_10m:"Wind",relative_humidity_2m:"Humidity",uv_index:"UV index",time:"Time"};return M[k]||k.replace(/_/g," ").replace(/([a-z])([A-Z])/g,"$1 $2").replace(/^./,c=>c.toUpperCase())}
+
+/* ---------- Select an API ---------- */
+function select(id){
+  const a=allApis().find(x=>x.id===id)||BUILTIN[0];activeId=a.id;store.set("apibench.active",a.id);
+  req=fromApi(a);
+  $("#apiName").textContent=a.name;$("#apiDesc").textContent=a.desc||"";
+  methodSel.value=req.method;methodSel.dataset.method=req.method;
+  renderList();renderParamsKV();renderHeadersKV();renderBodyPane();renderAuth();renderForm();syncUrl();
+  selectTab("rtab","rt-",resolvedBody().trim()&&req.method!=="GET"?"body":"params");
+  resetResponse();
+}
+
+/* ---------- Middle events ---------- */
+urlIn.addEventListener("input",()=>{
+  const v=urlIn.value;req.base=v.split("?")[0];
+  const q=parseQuery(v).map(x=>({k:x.k,v:x.v,in:"query",type:"text",on:true}));
+  q.forEach(x=>{const d=req.params.find(p=>p.in==="query"&&p.k===x.k);if(d)Object.assign(x,{type:d.type,label:d.label,options:d.options,hint:d.hint})});
+  req.params=req.params.filter(p=>p.in==="body").concat(q);
+  renderParamsKV();renderForm();updateCounts();
+});
+methodSel.addEventListener("change",()=>{req.method=methodSel.value;methodSel.dataset.method=req.method;renderBodyPane();updateCounts()});
+$("#body").addEventListener("input",e=>{req.bodyTpl="";req.body=e.target.value;req.params=req.params.filter(p=>p.in!=="body");renderForm();updateCounts();$("#bodyHint").textContent="JSON. Content-Type: application/json is added automatically."});
+$("#toPost").onclick=()=>{req.method="POST";methodSel.value="POST";methodSel.dataset.method="POST";$("#bodyBlocked").hidden=true;$("#bodyEditor").hidden=false;$("#body").focus();updateCounts()};
+$("#authType").onchange=e=>{req.auth.type=e.target.value;renderAuth();updateCounts()};
+$("#authVal").oninput=e=>{req.auth.value=e.target.value};
+$("#authKey").oninput=e=>{req.auth.key=e.target.value};
+$("#resetInputs").onclick=()=>{const a=allApis().find(x=>x.id===activeId);if(!a)return;const f=fromApi(a);Object.assign(req,{params:f.params,base:f.base,bodyTpl:f.bodyTpl,body:""});renderForm();onFormChange()};
+
+/* ---------- Send ---------- */
+function finalRequest(){
+  const headers={};req.headers.filter(h=>h.on!==false&&h.k).forEach(h=>headers[h.k]=h.v);
+  const a=req.auth;
+  if(a.type==="bearer"&&a.value)headers["Authorization"]="Bearer "+a.value;
+  if(a.type==="apikey"&&a.value)headers[a.key||"x-api-key"]=a.value;
+  let body=resolvedBody().trim()?resolvedBody():null;
+  if(["GET","HEAD"].includes(req.method))body=null;
+  if(body&&!Object.keys(headers).some(k=>k.toLowerCase()==="content-type"))headers["Content-Type"]="application/json";
+  return{method:req.method,url:urlIn.value.trim(),headers,body};
+}
+function resetResponse(){
+  $("#resStatus").innerHTML="";$("#resMeaning").textContent="";$("#resTime").textContent="";$("#resSize").textContent="";
+  $("#emptyRes").hidden=false;$("#emptyRes").innerHTML="Press <b>Send</b> to call the API.";$("#resPretty").hidden=true;$("#resRaw").textContent="";$("#resHeaders").innerHTML="";$("#cResHeaders").textContent="";
+  $("#readable").innerHTML=`<p class="hint" style="margin:0">Send the request to see the result in plain language.</p>`;
+}
+let busy=false;
+async function send(e){
+  if(e)e.preventDefault();if(busy)return;
+  const r=finalRequest();
+  if(!/^https?:\/\//i.test(r.url)){$("#resMeaning").textContent="The URL needs to start with https://";return}
+  busy=true;[$("#sendBtn"),$("#sendBtn2")].forEach(b=>{b.disabled=true;b.innerHTML='<span class="spin" aria-hidden="true"></span> Sending'});
+  $("#resStatus").innerHTML="";$("#resMeaning").textContent="Waiting…";$("#resTime").textContent="";$("#resSize").textContent="";
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),30000),t0=performance.now();
+  try{
+    const res=await fetch(r.url,{method:r.method,headers:r.headers,body:r.body,signal:ctl.signal});
+    const text=await res.text(),ms=Math.round(performance.now()-t0);
+    const st=STATUS[res.status]||[res.statusText||"",""];
+    $("#resStatus").innerHTML=`<span class="pill s${String(res.status)[0]}">${res.status} ${esc(st[0])}</span>`;
+    $("#resMeaning").textContent=st[1];$("#resTime").textContent=ms+" ms";$("#resSize").textContent=fmtSize(new Blob([text]).size);
+    let data=null;try{data=JSON.parse(text)}catch(_){}
+    if(text){$("#emptyRes").hidden=true;$("#resPretty").hidden=false;$("#resPretty").innerHTML=data!==null?hl(JSON.stringify(data,null,2)):esc(text)}
+    else{$("#emptyRes").hidden=false;$("#emptyRes").textContent="Empty body. Normal for DELETE and some errors.";$("#resPretty").hidden=true}
+    $("#resRaw").textContent=text;
+    const hb=$("#resHeaders");hb.innerHTML="";let n=0;res.headers.forEach((v,k)=>{n++;hb.insertAdjacentHTML("beforeend",`<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`)});$("#cResHeaders").textContent=n||"";
+    renderReadable(res.status,data,text,st);
+  }catch(err){
+    const ms=Math.round(performance.now()-t0),timeout=err.name==="AbortError";
+    $("#resStatus").innerHTML=`<span class="pill s0">No response</span>`;$("#resMeaning").textContent=timeout?"Timed out after 30 s.":"Blocked or unreachable.";$("#resTime").textContent=ms+" ms";
+    const msg=timeout?"The API didn't answer within 30 seconds.":"No usable response. Usually this API doesn't allow calls from a web page (CORS), or a header was refused. Check the URL and your connection.";
+    $("#emptyRes").hidden=false;$("#emptyRes").textContent=msg;$("#resPretty").hidden=true;$("#resRaw").textContent="";$("#resHeaders").innerHTML="";$("#cResHeaders").textContent="";
+    $("#readable").innerHTML=`<div class="r-error"><b>Call failed</b><p>${esc(msg)}</p></div>`;
+  }finally{clearTimeout(timer);busy=false;showResult();[$("#sendBtn"),$("#sendBtn2")].forEach(b=>{b.disabled=false;b.textContent="Send"})}
+}
+function fmtSize(b){return b<1024?b+" B":b<1048576?(b/1024).toFixed(1)+" KB":(b/1048576).toFixed(2)+" MB"}
+function hl(json){if(json.length>400000)return esc(json);return esc(json).replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,m=>{let c="j-num";if(/^"/.test(m))c=/:$/.test(m)?"j-key":"j-str";else if(/^(true|false)$/.test(m))c="j-bool";else if(m==="null")c="j-null";return`<span class="${c}">${m}</span>`})}
+$("#reqForm").addEventListener("submit",send);$("#sendBtn2").onclick=()=>send();
+document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"&&!$("#dlg").open){e.preventDefault();send()}});
+
+/* ---------- Readable result ---------- */
+const nf=new Intl.NumberFormat();
+function fmtVal(v,unit,key){
+  if(v===null||v===undefined||v==="")return"—";
+  if(typeof v==="boolean")return v?"Yes":"No";
+  if(typeof v==="number"){
+    if(key==="distance")return(v/1000).toFixed(1)+" km";
+    if(key==="duration")return Math.round(v/60)+" min";
+    if(key==="population")return nf.format(v);
+    return nf.format(v)+(unit&&unit!=="iso8601"?(unit==="%"?"%":" "+unit):"");
+  }
+  if(typeof v==="string"&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)){const d=new Date(v);if(!isNaN(d)){const today=d.toDateString()===new Date().toDateString();return d.toLocaleString([],Object.assign(today?{}:{weekday:"short"},{hour:"numeric"},d.getMinutes()?{minute:"2-digit"}:{}))}}
+  if(typeof v==="object"){const first=Array.isArray(v)?v.slice(0,5).map(x=>typeof x==="object"&&x?firstPrim(x):x).join(", "):firstPrim(v);return String(first)}
+  return String(v);
+}
+function firstPrim(o){for(const k in o){const x=o[k];if(x!==null&&typeof x!=="object")return x;if(x&&typeof x==="object"){const y=firstPrim(x);if(y!=="")return y}}return""}
+const SKIP=/(_units$|^generationtime_ms$|^utc_offset_seconds$|^timezone_abbreviation$|^licence$|^osm_|^place_id$|^boundingbox$|^thumbnail$|^originalimage$|^content_urls$|^api_urls$|^namespace$|^wikibase_item$|^pageid$|^revision$|^tid$|^titles$|^extract_html$|^waypoints$|^geometry$|^legs$|^weight)/;
+function parallel(o){const arrs=Object.entries(o).filter(([,v])=>Array.isArray(v)&&v.length>1&&v.every(x=>x===null||typeof x!=="object"));if(arrs.length<2)return null;const len=arrs[0][1].length;const same=arrs.filter(([,v])=>v.length===len);return same.length>=2?same:null}
+function tableHtml(cols,rows,units,curIdx){
+  return`<div class="r-table"><table><thead><tr>${cols.map(c=>`<th>${esc(humanKey(c))}</th>`).join("")}</tr></thead><tbody>${rows.map((r,i)=>`<tr${i===curIdx?' class="cur"':""}>${r.map((v,j)=>`<td>${esc(fmtVal(v,units[cols[j]],cols[j]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function dlHtml(o,units){
+  const rows=Object.entries(o).filter(([k,v])=>!SKIP.test(k)&&(v===null||typeof v!=="object"||(!Array.isArray(v)&&Object.values(v).every(x=>x===null||typeof x!=="object"))||(Array.isArray(v)&&v.every(x=>x===null||typeof x!=="object"))));
+  if(!rows.length)return"";
+  return`<div class="dl">${rows.map(([k,v])=>{let val;if(v&&typeof v==="object"&&!Array.isArray(v))val=Object.entries(v).map(([a,b])=>a+": "+fmtVal(b,null,a)).join(" · ");else val=fmtVal(v,units&&units[k],k);return`<div class="k">${esc(humanKey(k))}</div><div>${esc(val)}</div>`}).join("")}</div>`;
+}
+function genericHuman(data,depth){
+  depth=depth||0;if(depth>2)return"";
+  if(data===null||typeof data!=="object")return`<p class="r-text big">${esc(fmtVal(data))}</p>`;
+  if(Array.isArray(data)){
+    if(!data.length)return`<p class="hint">No results.</p>`;
+    if(data.length===1&&typeof data[0]==="object")return genericHuman(data[0],depth);
+    if(data.every(x=>x&&typeof x==="object"&&!Array.isArray(x))){const cols=Array.from(new Set(data.flatMap(x=>Object.keys(x)))).filter(k=>!SKIP.test(k)&&!/^(id|body|admin\d_id|country_id|feature_code|postcodes|timezone|elevation|population)$/.test(k)||k==="id").slice(0,5);return tableHtml(cols,data.slice(0,200).map(x=>cols.map(c=>x[c])),{},-1)}
+    return`<p class="r-text">${esc(data.slice(0,30).map(x=>fmtVal(x)).join(", "))}</p>`;
+  }
+  let html="";const meta=dlHtml(data,null);
+  for(const[k,v]of Object.entries(data)){
+    if(SKIP.test(k)||!v||typeof v!=="object")continue;
+    const units=data[k+"_units"]||{};
+    const par=!Array.isArray(v)&&parallel(v);
+    if(par){
+      const cols=par.map(a=>a[0]),rows=par[0][1].map((_,i)=>par.map(a=>a[1][i]));
+      let cur=-1;if(cols[0]==="time"){const now=new Date();cur=rows.findIndex(r=>{const d=new Date(r[0]);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()&&d.getHours()===now.getHours()})}
+      html+=`<div class="r-title">${esc(humanKey(k))}</div>`+(cur>=0?nowCards(cols,rows[cur],units):"")+tableHtml(cols,rows,units,cur);
+    }else if(Array.isArray(v)||Object.values(v).some(x=>x&&typeof x==="object")){
+      const inner=genericHuman(v,depth+1);if(inner)html+=`<div class="r-title">${esc(humanKey(k))}</div>`+inner;
+    }
+  }
+  if(meta)html+=(html?`<div class="r-title">Details</div>`:"")+meta;
+  return html||`<p class="hint">Nothing to summarise. See JSON in the middle.</p>`;
+}
+function nowCards(cols,row,units){
+  return`<div class="now">${cols.slice(1).map((c,i)=>`<div class="stat-card"><span>${esc(humanKey(c))} now</span><b>${esc(fmtVal(row[i+1],units[c],c))}</b></div>`).join("")}</div>`;
+}
+function renderReadable(status,data,text,st){
+  const box=$("#readable");
+  if(status>=400){box.innerHTML=`<div class="r-error"><b>${status} ${esc(st[0])}</b><p>${esc(st[1]||"The API returned an error.")}</p>${data&&typeof data==="object"?`<p class="hint">${esc(firstPrim(data))}</p>`:""}</div>`;return}
+  if(data===null){box.innerHTML=text?`<p class="r-text">${esc(text.slice(0,2000))}</p>`:`<p class="r-text"><b>${status} ${esc(st[0])}</b>. ${esc(st[1])}</p>`;return}
+  // Route: lead with distance and time
+  if(data&&data.routes&&data.routes[0]){const r=data.routes[0];box.innerHTML=`<div class="now"><div class="stat-card"><span>Distance</span><b>${fmtVal(r.distance,null,"distance")}</b></div><div class="stat-card"><span>Drive time</span><b>${fmtVal(r.duration,null,"duration")}</b></div></div><p class="hint">Without live traffic.</p>`;return}
+  // Exchange rates: one line per currency
+  if(data&&data.rates&&data.base){box.innerHTML=`<div class="r-title">${esc(nf.format(data.amount||1))} ${esc(data.base)} =</div><div class="dl">${Object.entries(data.rates).map(([c,v])=>`<div class="k">${esc(c)}</div><div class="big" style="font-size:16px">${esc(nf.format(v))}</div>`).join("")}</div><p class="hint">Rates as of ${esc(data.date||"")}.</p>`;return}
+  // Wikipedia summary
+  if(data&&data.extract&&data.title){box.innerHTML=`<p class="big" style="margin:0 0 6px">${esc(data.title)}</p>${data.description?`<p class="hint" style="margin:0 0 8px">${esc(data.description)}</p>`:""}<p class="r-text">${esc(data.extract)}</p>`;return}
+  // GraphQL: unwrap data
+  if(data&&data.data&&typeof data.data==="object"){box.innerHTML=genericHuman(data.data);return}
+  box.innerHTML=genericHuman(data);
+  const cur=box.querySelector("tr.cur"),tw=cur&&cur.closest(".r-table");if(tw)tw.scrollTop=cur.offsetTop-tw.querySelector("thead").offsetHeight-4;
+}
+
+function showResult(){const sec=$("#resultSection"),body=document.querySelector(".right-body");if(!sec||$("#app").classList.contains("right-closed"))return;body.scrollTo({top:sec.offsetTop-body.offsetTop,behavior:window.matchMedia("(prefers-reduced-motion:reduce)").matches?"auto":"smooth"})}
+function setInputs(open){$("#inputsBody").hidden=!open;$("#inputsToggle").setAttribute("aria-expanded",String(open));store.set("apibench.inputs",open)}
+$("#inputsToggle").onclick=()=>setInputs($("#inputsBody").hidden);
+setInputs(store.get("apibench.inputs",true));
+
+/* ---------- Right panel collapse ---------- */
+function setRight(open){$("#app").classList.toggle("right-closed",!open);$("#openRight").hidden=open;store.set("apibench.right",open)}
+$("#closeRight").onclick=()=>setRight(false);$("#openRight").onclick=()=>setRight(true);
+
+/* ---------- Add / edit API dialog ---------- */
+let editing=null;
+function pRow(p){
+  const d=document.createElement("div");d.className="prow";
+  d.innerHTML=`<input type="text" aria-label="Param name" placeholder="name" class="mono"><input type="text" aria-label="Label" placeholder="Label"><select aria-label="Type"><option value="text">Text</option><option value="number">Number</option><option value="select">Dropdown</option><option value="multi">Multi-select</option><option value="toggle">Yes / no</option><option value="hidden">Fixed (hidden)</option></select><input type="text" aria-label="Default value" placeholder="default"><input type="text" aria-label="Options" placeholder="a, b, c"><button type="button" class="icon-btn" aria-label="Remove input">✕</button>`;
+  const [n,l,t,v,o]=d.querySelectorAll("input,select");
+  n.value=p.k||"";l.value=p.label||"";t.value=p.type||"text";v.value=p.v||"";o.value=(p.options||[]).map(x=>Array.isArray(x)?x[0]:x).join(", ");d.dataset.in=p.in||"";
+  d.querySelector("button").onclick=()=>d.remove();
+  $("#dParams").append(d);
+}
+function openDialog(a){
+  editing=a||null;$("#dlgTitle").textContent=a?"Edit API":"Add API";$("#dErr").textContent="";
+  $("#dName").value=a?a.name:"";$("#dMethod").value=a?a.method:"GET";$("#dUrl").value=a?a.url:"";$("#dDesc").value=a?(a.desc||""):"";$("#dBody").value=a?(a.body||""):"";
+  $("#dParams").innerHTML="";(a?a.params:[]).forEach(pRow);
+  $("#dlg").showModal();$("#dName").focus();
+}
+function detect(){
+  const url=$("#dUrl").value.trim(),have=new Set(Array.from($$("#dParams .prow")).map(r=>r.querySelector("input").value.trim()));
+  (url.split("?")[0].match(/\{(\w+)\}/g)||[]).forEach(m=>{const k=m.slice(1,-1);if(!have.has(k)){pRow({k,in:"path"});have.add(k)}});
+  parseQuery(url).forEach(q=>{if(!have.has(q.k)){pRow({k:q.k,v:q.v});have.add(q.k)}});
+  ($("#dBody").value.match(/\{(\w+)\}/g)||[]).forEach(m=>{const k=m.slice(1,-1);if(!have.has(k)){pRow({k,in:"body"});have.add(k)}});
+}
+$("#addBtn").onclick=()=>openDialog(null);
+$("#dDetect").onclick=detect;$("#dAddParam").onclick=()=>pRow({});
+$("#dCancel").onclick=$("#dlgClose").onclick=()=>$("#dlg").close();
+$("#dSave").onclick=()=>{
+  const name=$("#dName").value.trim(),url=$("#dUrl").value.trim();
+  if(!name){$("#dErr").textContent="Give the API a name.";return}
+  if(!/^https?:\/\//i.test(url)){$("#dErr").textContent="The URL needs to start with https://";return}
+  detect();
+  const pathKeys=(url.split("?")[0].match(/\{(\w+)\}/g)||[]).map(m=>m.slice(1,-1)),body=$("#dBody").value,bodyKeys=(body.match(/\{(\w+)\}/g)||[]).map(m=>m.slice(1,-1));
+  const params=Array.from($$("#dParams .prow")).map(r=>{const [n,l,t,v,o]=r.querySelectorAll("input,select");const k=n.value.trim();if(!k)return null;
+    const p={k,label:l.value.trim()||humanKey(k),type:t.value,v:v.value,in:pathKeys.includes(k)?"path":bodyKeys.includes(k)?"body":"query"};
+    if(["select","multi"].includes(p.type))p.options=o.value.split(",").map(s=>s.trim()).filter(Boolean);
+    if(p.type==="select"&&!p.v&&p.options.length)p.v=p.options[0];return p}).filter(Boolean);
+  const api={id:editing?editing.id:"c"+Date.now(),group:"My APIs",name,method:$("#dMethod").value,url:url.split("?")[0],desc:$("#dDesc").value.trim(),params,body:body.trim()?body:"",headers:body.trim()?[CT]:[]};
+  if(editing)custom=custom.map(x=>x.id===editing.id?api:x);else custom.unshift(api);
+  store.set("apibench.custom",custom);$("#dlg").close();select(api.id);
+};
+
+/* ---------- Init ---------- */
+setRight(store.get("apibench.right",true));
+select(store.get("apibench.active","forecast"));
+})();
+</script>
+</body>
+</html>
