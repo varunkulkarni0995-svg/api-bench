@@ -141,6 +141,10 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute
 .chip input{accent-color:var(--accent);margin:0}
 .chip:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
 .toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+textarea.ftext{font-family:var(--font-ui);font-size:13.5px;min-height:76px}
+.hint a{color:var(--accent);font-weight:500}
+.answer{font-size:14.5px;line-height:1.6;white-space:pre-wrap;margin:0;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:12px}
+.meta-line{font-size:12px;color:var(--muted);margin-top:8px;font-family:var(--font-mono)}
 .toggle input{accent-color:var(--accent);width:16px;height:16px}
 
 /* Readable result */
@@ -307,7 +311,38 @@ const CT={k:"Content-Type",v:"application/json",on:true};
 const JP="https://jsonplaceholder.typicode.com";
 
 /* ---------- Pre-configured APIs ---------- */
+const PROMPT={k:"prompt",in:"body",label:"Prompt",type:"textarea",v:"I just moved to NYC. It's 12°C but feels like 6°C with wind. What should I wear? Two lines."};
+const TEMP={k:"temperature",in:"body",label:"Creativity (temperature)",type:"select",v:"0.7",options:[["0","0 · focused"],["0.7","0.7 · balanced"],["1.2","1.2 · creative"]]};
+const SYS={k:"system",in:"body",label:"System prompt",type:"textarea",v:"You are a concise, practical assistant."};
+const chatBody='{\n  "model": "{model}",\n  "messages": [\n    { "role": "system", "content": "{system}" },\n    { "role": "user", "content": "{prompt}" }\n  ],\n  "temperature": {temperature}\n}';
 const BUILTIN=[
+ {id:"gemini",group:"Gen AI",name:"Gemini: generate text",method:"POST",url:"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",desc:"Google Gemini API. Free tier on Flash models; free prompts may be used to improve Google's products.",
+  headers:[CT,{k:"x-goog-api-key",v:"{gemini_key}",on:true}],
+  body:'{\n  "contents": [{ "parts": [{ "text": "{prompt}" }] }],\n  "generationConfig": { "temperature": {temperature} }\n}',params:[
+  {k:"gemini_key",in:"header",label:"Gemini API key",type:"secret",v:"",link:"https://aistudio.google.com/apikey",hint:"Free from Google AI Studio. Saved only in this browser."},
+  {k:"model",in:"path",label:"Model",type:"combo",v:"gemini-3.5-flash-lite",options:["gemini-3.5-flash-lite","gemini-3.8-flash","gemini-3.1-flash-lite"],hint:"If a model errors, run 'Gemini: list models' for current names."},
+  PROMPT,TEMP]},
+ {id:"gemini-models",group:"Gen AI",name:"Gemini: list models",method:"GET",url:"https://generativelanguage.googleapis.com/v1beta/models",desc:"Lists the model names your key can use.",headers:[{k:"x-goog-api-key",v:"{gemini_key}",on:true}],params:[
+  {k:"gemini_key",in:"header",label:"Gemini API key",type:"secret",v:"",link:"https://aistudio.google.com/apikey",hint:"Saved only in this browser."},{k:"pageSize",type:"hidden",v:"100"}]},
+ {id:"groq",group:"Gen AI",name:"Groq: chat",method:"POST",url:"https://api.groq.com/openai/v1/chat/completions",desc:"Groq: very fast open models (Llama, GPT-OSS, Qwen). Free tier, rate-limited per model. OpenAI-compatible format.",
+  headers:[CT],auth:{type:"bearer",value:"{groq_key}"},body:chatBody,params:[
+  {k:"groq_key",in:"header",label:"Groq API key",type:"secret",v:"",link:"https://console.groq.com/keys",hint:"Free, no card. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-20b",options:["openai/gpt-oss-20b","openai/gpt-oss-120b","llama-3.3-70b-versatile","llama-3.1-8b-instant"],hint:"Run 'Groq: list models' for current names."},
+  SYS,PROMPT,TEMP]},
+ {id:"groq-models",group:"Gen AI",name:"Groq: list models",method:"GET",url:"https://api.groq.com/openai/v1/models",desc:"Lists Groq's current model ids.",auth:{type:"bearer",value:"{groq_key}"},params:[
+  {k:"groq_key",in:"header",label:"Groq API key",type:"secret",v:"",link:"https://console.groq.com/keys",hint:"Saved only in this browser."}]},
+ {id:"openrouter",group:"Gen AI",name:"OpenRouter: chat",method:"POST",url:"https://openrouter.ai/api/v1/chat/completions",desc:"OpenRouter: one API for many providers. Models ending in :free cost nothing (about 20 requests/min, 50/day).",
+  headers:[CT],auth:{type:"bearer",value:"{openrouter_key}"},body:chatBody,params:[
+  {k:"openrouter_key",in:"header",label:"OpenRouter API key",type:"secret",v:"",link:"https://openrouter.ai/keys",hint:"Free, no card. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-120b:free",options:["openai/gpt-oss-120b:free","meta-llama/llama-3.3-70b-instruct:free","qwen/qwen3-coder:free"],hint:"Pick any model ending in :free from 'OpenRouter: list models'."},
+  SYS,PROMPT,TEMP]},
+ {id:"openrouter-models",group:"Gen AI",name:"OpenRouter: list models",method:"GET",url:"https://openrouter.ai/api/v1/models",desc:"All models on OpenRouter. No key needed. Free ones end in :free.",params:[]},
+ {id:"hf",group:"Gen AI",name:"Hugging Face: chat",method:"POST",url:"https://router.huggingface.co/v1/chat/completions",desc:"Hugging Face Inference Providers: open models, small monthly free credit. OpenAI-compatible format.",
+  headers:[CT],auth:{type:"bearer",value:"{hf_token}"},body:chatBody,params:[
+  {k:"hf_token",in:"header",label:"Hugging Face token",type:"secret",v:"",link:"https://huggingface.co/settings/tokens",hint:"Create a token with 'Inference Providers' permission. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-20b",options:["openai/gpt-oss-20b","meta-llama/Llama-3.1-8B-Instruct","Qwen/Qwen2.5-7B-Instruct"],hint:"Run 'Hugging Face: list models' for current names."},
+  SYS,PROMPT,TEMP]},
+ {id:"hf-models",group:"Gen AI",name:"Hugging Face: list models",method:"GET",url:"https://router.huggingface.co/v1/models",desc:"Models available through Inference Providers.",params:[]},
  {id:"forecast",group:"Weather",name:"Hourly forecast",method:"GET",url:"https://api.open-meteo.com/v1/forecast",desc:"Open-Meteo. Hourly weather for any location. No key.",params:[
   {k:"latitude",label:"Latitude",type:"number",v:"40.71",hint:"NYC ≈ 40.71"},
   {k:"longitude",label:"Longitude",type:"number",v:"-74.01",hint:"NYC ≈ -74.01"},
@@ -356,7 +391,7 @@ const STATUS={200:["OK","Worked."],201:["Created","A new record was created."],2
 let req=null,activeId=null;
 function fromApi(a){
   const r={id:a.id,method:a.method||"GET",base:a.url.split("?")[0],bodyTpl:a.body||"",body:"",headers:clone(a.headers||[]),auth:clone(a.auth||{type:"none"}),params:[]};
-  const defined=(a.params||[]).map(p=>Object.assign({in:"query",type:"text",on:true},clone(p)));
+  const defined=(a.params||[]).map(p=>{const q=Object.assign({in:"query",type:"text",on:true},clone(p));if(q.type==="secret")q.v=store.get("apibench.secret."+q.k,"");return q});
   const inUrl=parseQuery(a.url).filter(q=>!defined.some(p=>p.k===q.k)).map(q=>({k:q.k,v:q.v,in:"query",type:"text",on:true}));
   r.params=defined.concat(inUrl);r.defaults=clone(r.params);return r;
 }
@@ -371,6 +406,7 @@ function resolvedUrl(){
   const q=req.params.filter(p=>p.in==="query"&&p.on!==false&&p.k).map(p=>enc(p.k)+"="+enc(p.v)).join("&");
   return q?base+"?"+q:base;
 }
+function tpl(s){return fill(String(s||""),["path","body","header"],v=>v)}
 function resolvedBody(){return req.bodyTpl?fill(req.bodyTpl,["body","path"],v=>JSON.stringify(v).slice(1,-1)):req.body}
 
 /* ---------- Render: left list ---------- */
@@ -459,12 +495,16 @@ function renderForm(){
     if(p.type==="select"){html=`<label for="${id}">${label}</label><select id="${id}">${optList(p.options).map(([v,l])=>`<option value="${attr(v)}"${String(v)===String(p.v)?" selected":""}>${esc(l)}</option>`).join("")}</select>`}
     else if(p.type==="multi"){const sel=String(p.v).split(",").filter(Boolean);html=`<span class="flabel">${label}</span><div class="chips">${optList(p.options).map(([v,l])=>`<label class="chip"><input type="checkbox" value="${attr(v)}"${sel.includes(String(v))?" checked":""}>${esc(l)}</label>`).join("")}</div>`}
     else if(p.type==="toggle"){html=`<label class="toggle"><input type="checkbox" id="${id}"${String(p.v)==="true"?" checked":""}>${label}</label>`}
+    else if(p.type==="textarea"){html=`<label for="${id}">${label}</label><textarea id="${id}" class="ftext" spellcheck="true">${esc(p.v)}</textarea>`}
+    else if(p.type==="secret"){html=`<label for="${id}">${label}</label><div style="display:flex;gap:6px"><input type="password" id="${id}" value="${attr(p.v)}" autocomplete="off" spellcheck="false" placeholder="Paste key"><button type="button" class="btn small" data-reveal aria-label="Show key">Show</button></div>`}
+    else if(p.type==="combo"){html=`<label for="${id}">${label}</label><input type="text" id="${id}" list="${id}_l" value="${attr(p.v)}" spellcheck="false"><datalist id="${id}_l">${optList(p.options).map(([v])=>`<option value="${attr(v)}"></option>`).join("")}</datalist>`}
     else{html=`<label for="${id}">${label}</label><input type="${p.type==="number"?"number":"text"}" step="any" id="${id}" value="${attr(p.v)}" spellcheck="false">`}
-    if(p.hint)html+=`<p class="hint">${esc(p.hint)}</p>`;
+    if(p.hint||p.link)html+=`<p class="hint">${esc(p.hint||"")}${p.link?` <a href="${attr(p.link)}" target="_blank" rel="noopener">Get a free key ↗</a>`:""}</p>`;
     wrap.innerHTML=html;
     if(p.type==="multi")wrap.querySelectorAll("input").forEach(cb=>cb.onchange=()=>{p.v=Array.from(wrap.querySelectorAll("input:checked")).map(x=>x.value).join(",");onFormChange()});
     else if(p.type==="toggle")wrap.querySelector("input").onchange=e=>{p.v=String(e.target.checked);onFormChange()};
-    else{const el=wrap.querySelector("input,select");el.addEventListener(p.type==="select"?"change":"input",()=>{p.v=el.value;onFormChange()})}
+    else{const el=wrap.querySelector("input,select,textarea");el.addEventListener(p.type==="select"?"change":"input",()=>{p.v=el.value;if(p.type==="secret")store.set("apibench.secret."+p.k,p.v);onFormChange()});
+      const rv=wrap.querySelector("[data-reveal]");if(rv)rv.onclick=()=>{const show=el.type==="password";el.type=show?"text":"password";rv.textContent=show?"Hide":"Show";rv.setAttribute("aria-label",show?"Hide key":"Show key")}}
     box.append(wrap);
   });
 }
@@ -488,7 +528,7 @@ urlIn.addEventListener("input",()=>{
   const v=urlIn.value;req.base=v.split("?")[0];
   const q=parseQuery(v).map(x=>({k:x.k,v:x.v,in:"query",type:"text",on:true}));
   q.forEach(x=>{const d=req.params.find(p=>p.in==="query"&&p.k===x.k);if(d)Object.assign(x,{type:d.type,label:d.label,options:d.options,hint:d.hint})});
-  req.params=req.params.filter(p=>p.in==="body").concat(q);
+  req.params=req.params.filter(p=>p.in==="body"||p.in==="header").concat(q);
   renderParamsKV();renderForm();updateCounts();
 });
 methodSel.addEventListener("change",()=>{req.method=methodSel.value;methodSel.dataset.method=req.method;renderBodyPane();updateCounts()});
@@ -501,10 +541,10 @@ $("#resetInputs").onclick=()=>{const a=allApis().find(x=>x.id===activeId);if(!a)
 
 /* ---------- Send ---------- */
 function finalRequest(){
-  const headers={};req.headers.filter(h=>h.on!==false&&h.k).forEach(h=>headers[h.k]=h.v);
+  const headers={};req.headers.filter(h=>h.on!==false&&h.k).forEach(h=>headers[h.k]=tpl(h.v));
   const a=req.auth;
-  if(a.type==="bearer"&&a.value)headers["Authorization"]="Bearer "+a.value;
-  if(a.type==="apikey"&&a.value)headers[a.key||"x-api-key"]=a.value;
+  if(a.type==="bearer"&&a.value)headers["Authorization"]="Bearer "+tpl(a.value);
+  if(a.type==="apikey"&&a.value)headers[a.key||"x-api-key"]=tpl(a.value);
   let body=resolvedBody().trim()?resolvedBody():null;
   if(["GET","HEAD"].includes(req.method))body=null;
   if(body&&!Object.keys(headers).some(k=>k.toLowerCase()==="content-type"))headers["Content-Type"]="application/json";
@@ -518,6 +558,10 @@ function resetResponse(){
 let busy=false;
 async function send(e){
   if(e)e.preventDefault();if(busy)return;
+  const missing=req.params.find(p=>p.type==="secret"&&!String(p.v).trim());
+  if(missing){setRight(true);setInputs(true);$("#resMeaning").textContent="Add your "+(missing.label||missing.k)+" first.";
+    $("#readable").innerHTML=`<div class="r-error"><b>Key needed</b><p>Paste your ${esc(missing.label||missing.k)} in Inputs above.${missing.link?` <a href="${attr(missing.link)}" target="_blank" rel="noopener">Get a free one</a>.`:""}</p></div>`;
+    const f=$(`#form [data-key="${CSS.escape(missing.in+":"+missing.k)}"] input`);if(f)f.focus();return}
   const r=finalRequest();
   if(!/^https?:\/\//i.test(r.url)){$("#resMeaning").textContent="The URL needs to start with https://";return}
   busy=true;[$("#sendBtn"),$("#sendBtn2")].forEach(b=>{b.disabled=true;b.innerHTML='<span class="spin" aria-hidden="true"></span> Sending'});
@@ -604,8 +648,15 @@ function nowCards(cols,row,units){
 }
 function renderReadable(status,data,text,st){
   const box=$("#readable");
-  if(status>=400){box.innerHTML=`<div class="r-error"><b>${status} ${esc(st[0])}</b><p>${esc(st[1]||"The API returned an error.")}</p>${data&&typeof data==="object"?`<p class="hint">${esc(firstPrim(data))}</p>`:""}</div>`;return}
+  if(status>=400){box.innerHTML=`<div class="r-error"><b>${status} ${esc(st[0])}</b><p>${esc(st[1]||"The API returned an error.")}</p>${data&&typeof data==="object"?`<p class="hint">${esc((data.error&&(data.error.message||(typeof data.error==="string"?data.error:"")))||data.message||firstPrim(data))}</p>`:""}</div>`;return}
   if(data===null){box.innerHTML=text?`<p class="r-text">${esc(text.slice(0,2000))}</p>`:`<p class="r-text"><b>${status} ${esc(st[0])}</b>. ${esc(st[1])}</p>`;return}
+  // Gen AI: show the answer text
+  const chatText=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+  const gemText=data&&data.candidates&&data.candidates[0]&&data.candidates[0].content&&(data.candidates[0].content.parts||[]).map(p=>p.text||"").join("");
+  if(chatText||gemText){
+    const u=data.usage||{},g=data.usageMetadata||{};
+    const inT=u.prompt_tokens??g.promptTokenCount,outT=u.completion_tokens??g.candidatesTokenCount,model=data.model||data.modelVersion||"";
+    box.innerHTML=`<div class="r-title">Answer</div><p class="answer">${esc(chatText||gemText)}</p><div class="meta-line">${esc(model)}${inT!=null?` · ${inT} tokens in · ${outT} out`:""}</div>`;return}
   // Route: lead with distance and time
   if(data&&data.routes&&data.routes[0]){const r=data.routes[0];box.innerHTML=`<div class="now"><div class="stat-card"><span>Distance</span><b>${fmtVal(r.distance,null,"distance")}</b></div><div class="stat-card"><span>Drive time</span><b>${fmtVal(r.duration,null,"duration")}</b></div></div><p class="hint">Without live traffic.</p>`;return}
   // Exchange rates: one line per currency
