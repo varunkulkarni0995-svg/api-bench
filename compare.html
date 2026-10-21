@@ -83,7 +83,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a><h1>Compare models <span class="empty" style="font-size:12px;font-weight:400">v1.3.2</span></h1></div>
+  <div><a href="./">← API Bench</a><h1>Compare models <span class="empty" style="font-size:12px;font-weight:400">v1.3.3</span></h1></div>
   <span class="empty">Same prompt to several Gen AI models. Keys are saved only in this browser and go straight to each provider (no server in between). Copies and exports show placeholders such as &lt;groq_key&gt;, never the key.</span>
 </header>
 
@@ -253,6 +253,7 @@ let runMeta = null;
 let attemptCount = {};
 let mode = "single";   // "single" | "convo"
 let convo = { id:1, turn:0, hist:{} };   // hist[rowId] = [{role,content}, …] (successful turns only)
+const noTemp = new Set(store.get("apibench.compare.noTemp", []));   // models that reject "temperature"
 const newRunId = d => "run-" + stamp(d).slice(0,19).replace(/[-: ]/g,"").replace(/^(\d{8})/,"$1-");
 
 /* never let a key leak into copies or exports */
@@ -284,22 +285,26 @@ function settingsNow(){
 
 function buildRequest(r, userText, history){
   const sys = $("#sys").value, user = userText, hist = history || [];
-  const st = settingsNow(), { temperature, seed } = st, maxTok = st.max_tokens;
+  const st = settingsNow(), { seed } = st, maxTok = st.max_tokens;
   const P = PROVIDERS[r.provider], base = baseOf(r), key = keyOf(r), kn = keyName(r);
+  const skipT = noTemp.has(r.provider + "|" + r.model);
+  const temperature = skipT ? undefined : st.temperature;
   const settings = { ...st };
-  if (P.kind === "anthropic") { settings.temperature = Math.min(temperature, 1); if (seed !== null) settings.seedNote = "seed not supported by Anthropic; not sent"; }
+  if (skipT) { settings.temperature = null; settings.tempNote = "temperature not sent: this model rejects it"; }
+  if (P.kind === "anthropic" && !skipT) { settings.temperature = Math.min(temperature, 1); }
+  if (P.kind === "anthropic") { if (seed !== null) settings.seedNote = "seed not supported by Anthropic; not sent"; }
   const meta = { prompt:{ system:sys, user, historyMessages:hist.length }, settings };
   if (P.kind === "gemini") {
     const contents = hist.map(m => ({ role:m.role === "assistant" ? "model" : "user", parts:[{ text:m.content }] }));
     contents.push({ role:"user", parts:[{ text:user }] });
-    const body = { contents, generationConfig:{ temperature, maxOutputTokens:maxTok } };
+    const body = { contents, generationConfig:{ ...(skipT ? {} : { temperature }), maxOutputTokens:maxTok } };
     if (seed !== null) body.generationConfig.seed = seed;
     if (sys.trim()) body.systemInstruction = { parts:[{ text:sys }] };
     return { ...meta, url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`, method:"POST",
       headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, shownHeaders:{ "Content-Type":"application/json", "x-goog-api-key":`<${kn}>` }, body };
   }
   if (P.kind === "anthropic") {
-    const body = { model:r.model, max_tokens:maxTok, temperature:Math.min(temperature, 1), messages:[...hist.map(m => ({ role:m.role, content:m.content })), { role:"user", content:user }] };
+    const body = { model:r.model, max_tokens:maxTok, ...(skipT ? {} : { temperature:Math.min(temperature, 1) }), messages:[...hist.map(m => ({ role:m.role, content:m.content })), { role:"user", content:user }] };
     if (sys.trim()) body.system = sys;
     const h = anthHeaders(key);
     return { ...meta, url:`${base}/messages`, method:"POST", headers:{ "Content-Type":"application/json", ...h },
@@ -307,7 +312,7 @@ function buildRequest(r, userText, history){
   }
   const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys });
   hist.forEach(m => messages.push({ role:m.role, content:m.content })); messages.push({ role:"user", content:user });
-  const body = { model:r.model, messages, temperature, [P.maxKey || "max_tokens"]:maxTok };
+  const body = { model:r.model, messages, ...(skipT ? {} : { temperature }), [P.maxKey || "max_tokens"]:maxTok };
   if (seed !== null) body[P.seedKey || "seed"] = seed;
   return { ...meta, url:`${base}/chat/completions`, method:"POST",
     headers:{ "Content-Type":"application/json", Authorization:"Bearer "+key }, shownHeaders:{ "Content-Type":"application/json", Authorization:`Bearer <${kn}>` }, body };
@@ -384,6 +389,13 @@ async function runOne(r, idx, trial, userText, turn){
     } else {
       res.state = "error"; res.error = (json && (json.error?.message || json.message || JSON.stringify(json.error||json))) || raw.slice(0,300) || ("HTTP " + http.status);
       res.errType = errType(http.status, res.error);
+      const tKey = r.provider + "|" + r.model;
+      if (http.status === 400 && /temperature/i.test(res.error) && !noTemp.has(tKey)) {
+        noTemp.add(tKey); store.set("apibench.compare.noTemp", [...noTemp]);
+        res.errType = "Setting not supported: model rejects temperature. Sent again without it (next attempt).";
+        renderResults(); renderLog();
+        return runOne(r, idx, trial, userText, turn);
+      }
     }
   } catch (e) {
     Object.assign(res, { state:"error", status:"network", ms:Math.round(performance.now()-p0), gotAt:new Date(), error:mask(e.message), errType:errType("network") });
@@ -461,7 +473,7 @@ function renderSummary(){
 
 function pretty(x){ try { return JSON.stringify(typeof x === "string" ? JSON.parse(x) : x, null, 2); } catch (e) { return String(x ?? ""); } }
 const at = d => d ? stamp(d) + " " + tz : "–";
-const setTxt = a => { const s = a.req.settings; return `temp ${s.temperature} · max ${s.max_tokens}${s.seed !== null && s.seed !== undefined ? ` · seed ${s.seed}${s.seedNote ? " (not sent)" : ""}` : ""}`; };
+const setTxt = a => { const s = a.req.settings; return `${s.tempNote ? "temp not sent (model rejects it)" : "temp " + s.temperature} · max ${s.max_tokens}${s.seed !== null && s.seed !== undefined ? ` · seed ${s.seed}${s.seedNote ? " (not sent)" : ""}` : ""}`; };
 const reqText = a => `REQUEST · sent ${at(a.sentAt)}${a.turn ? ` · session ${a.sessionId}, turn ${a.turn} (${a.req.prompt.historyMessages} earlier messages included)` : ""}\n${a.req.method} ${a.req.url}\n${Object.entries(a.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(a.req.body)}`;
 const resText = a => a.state === "running" ? "RESPONSE · waiting…" :
   `RESPONSE · received ${at(a.gotAt)} · ${a.ms} ms · status ${a.status}${a.host ? " · answered by " + a.host : ""}${a.errType ? "\nError type: " + a.errType : ""}${a.error ? "\nError: " + a.error : ""}${a.flags?.length ? "\nFlags: " + a.flags.join(" | ") : ""}\n\n${a.raw ? pretty(a.raw) : "(no response body)"}`;
