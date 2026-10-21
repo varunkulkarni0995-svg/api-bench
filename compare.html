@@ -418,7 +418,7 @@ async function sendNext(){
   await Promise.all(rows.map((r,i) => runOne(r, i+1, null, text, convo.turn)));
   busy(false); $("#user").value = ""; renderConvoBar(); toast(`Turn ${convo.turn} finished`);
 }
-$("#newSession").onclick = () => { convo = { id:convo.id + 1, turn:0, hist:{} }; results = {}; renderResults(); renderConvoBar(); toast(`New session ${convo.id} started`); };
+$("#newSession").onclick = () => { convo = { id:convo.id + (convo.turn ? 1 : 0), turn:0, hist:{} }; results = {}; renderResults(); renderConvoBar(); toast(`New session ${convo.id} started`); };
 
 function renderConvoBar(){
   $("#convoBar").hidden = mode !== "convo";
@@ -428,6 +428,7 @@ function renderConvoBar(){
   $("#userLbl").textContent = mode !== "convo" ? "User prompt" : convo.turn ? `Your message (turn ${convo.turn + 1})` : "First message";
 }
 function setMode(m){
+  if (m === mode) return;
   mode = m;
   $("#mSingle").setAttribute("aria-pressed", m === "single"); $("#mConvo").setAttribute("aria-pressed", m === "convo");
   $("#modeHint").textContent = m === "single" ? "Each run is a fresh, one-message test." : "Type a message and press Send; each send continues the same conversation. New session starts over.";
@@ -550,31 +551,38 @@ function mdForResult(res){
     "", "**Response**", "", fence("json", resText(res)), ""];
   return lines.join("\n");
 }
-function transcriptMd(){
-  return ordered().map(({r, res}) => {
-    const h = convo.hist[r.id] || [];
-    return `### ${res.idx}. ${res.label}\n\n` + h.map((m,i) => `**${m.role === "user" ? `You (turn ${Math.floor(i/2)+1})` : "AI"}:**\n\n${m.content}`).join("\n\n")
-      + (res.state !== "ok" ? `\n\n**You (turn ${res.turn}):**\n\n${res.userText}\n\n**Failed:** ${res.status} · ${res.errType||""} · ${res.error||""}` : "");
+function transcriptMd(onlySid){
+  const cs = calls().filter(a => a.sessionId && (!onlySid || a.sessionId === onlySid));
+  const sessions = [...new Set(cs.map(a => a.sessionId))];
+  return sessions.map(sid => {
+    const inS = cs.filter(a => a.sessionId === sid);
+    const models = [...new Map(inS.map(a => [a.rowId, a])).values()];
+    return `### Session ${sid}\n\n` + models.map(m0 => {
+      const mine = inS.filter(a => a.rowId === m0.rowId);
+      const turns = [...new Set(mine.map(a => a.turn))].sort((x,y) => x - y);
+      return `#### ${m0.idx}. ${m0.label}\n\n` + turns.map(t => { const a = mine.filter(x => x.turn === t).at(-1);
+        return `**You (turn ${t}):**\n\n${a.userText}\n\n` + (a.state === "ok" ? `**AI:**\n\n${a.text || "(empty answer)"}` : a.state === "running" ? "_waiting…_" : `**Failed:** ${a.status} · ${a.errType||""} · ${a.error||""}`); }).join("\n\n");
+    }).join("\n\n");
   }).join("\n\n---\n\n");
 }
 function fullMd(){
   const list = ordered().map(x => x.res), all = calls();
   const m = runMeta || { id:"–", at:new Date(), trials:1, mode, sys:$("#sys").value, user:$("#user").value, ...settingsNow() };
   return mask([`# Model comparison: evidence`, "",
-    `- Run id: ${m.id}`, `- Mode: ${m.mode === "convo" ? `conversation (session ${convo.id}, ${convo.turn} turn(s)); each model keeps its own history` : "single turn"}`,
+    `- Run id: ${m.id}`, `- Mode: ${m.mode === "convo" ? `conversation; each model keeps its own history; sessions in this log: ${[...new Set(calls().filter(a => a.sessionId).map(a => a.sessionId))].join(", ")} (current: ${convo.id})` : "single turn"}`,
     `- Generated: ${stamp(new Date())} ${tz}`, `- Run started: ${stamp(m.at)} ${tz}`, `- Tool: API Bench · Compare models`,
     `- Temperature: ${m.temp} · Max length: ${m.maxTok} tokens · Seed: ${m.seed ?? "none"} · Trials per model: ${m.trials}`,
     `- Keys: saved only in the browser, sent directly to each provider; shown here as placeholders such as \`<groq_key>\`.`,
     `- Flags are automatic checks (empty or cut-off answers, possible refusals); confirm by reading the answer.`, "",
     "## Prompt", "", "**System / role**", "", fence("text", m.sys || "(none)"), "", `**${m.mode === "convo" ? "First message" : "User"}**`, "", fence("text", m.user || ""), "",
-    ...(m.mode === "convo" ? ["## Conversation transcripts", "", transcriptMd(), ""] : []),
+    ...(calls().some(a => a.sessionId) ? ["## Conversation transcripts (all sessions)", "", transcriptMd(), ""] : []),
     "## Comparison (latest attempt per model)", "", "| # | Provider · model | Attempt | Status | Error type | Flags | Time (ms) | Tokens in | Tokens out | Thinking | Words | Finish |", "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ...list.map(r => `| ${r.idx} | ${r.label}${r.host?` (via ${r.host})`:""} | ${r.attempt} | ${r.status??r.state} | ${r.errType||"–"} | ${(r.flags||[]).join("; ")||"–"} | ${r.ms??"–"} | ${r.tokIn??"–"} | ${r.tokOut??"–"} | ${r.tokThink??"–"} | ${r.words??"–"} | ${r.finish || (r.state==="error"?"error":"–")} |`), "",
     `## All attempts in time order (${all.length}), full request and response`, "", ...all.map(mdForResult),
     "## Timeline", "", ...log.map(e => `- ${e.type==="RUN" ? `${stamp(e.at)} ${tz} · RUN · ${e.text}` : logLine(e.res)}`), ""].join("\n"));
 }
 function answersMd(){
-  if (mode === "convo" && convo.turn) return mask(transcriptMd());
+  if (mode === "convo" && convo.turn) return mask(transcriptMd(convo.id));
   return mask(ordered().map(({res}) => `## ${res.idx}. ${res.label}\n${res.state==="ok" ? `(${res.ms} ms · ${res.tokOut??"–"} tokens out${res.flags.length ? " · ⚠ " + res.flags.join("; ") : ""})\n\n${res.text}` : `Failed: ${res.status} · ${res.errType||""}\n${res.error||""}`}`).join("\n\n---\n\n"));
 }
 function runJson(){
