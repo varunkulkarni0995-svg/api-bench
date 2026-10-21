@@ -66,6 +66,9 @@ td.num{font-family:var(--font-mono)}
 .empty{color:var(--muted);font-size:14px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
+.msg{margin:0 0 10px;white-space:pre-wrap;font-size:14px;line-height:1.5}
+.msg b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.flag{display:block;font-size:12px;font-weight:600;color:var(--warn)}
 .log details{border-bottom:1px solid var(--line);padding:4px 0}
 .log summary{cursor:pointer}
 .log details pre{margin:6px 0 8px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
@@ -86,12 +89,15 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 
 <section class="panel" aria-labelledby="p1">
   <h2 id="p1"><span class="n">1</span>Prompt (same for all models)</h2>
+  <div class="row" style="margin-bottom:8px"><div class="seg" role="group" aria-label="Mode"><button type="button" id="mSingle" aria-pressed="true">Single turn</button><button type="button" id="mConvo" aria-pressed="false">Conversation</button></div>
+  <span class="empty" id="modeHint">Each run is a fresh, one-message test.</span></div>
   <label>System / role<textarea id="sys" rows="2" placeholder="e.g. You are a payments product manager. Answer briefly."></textarea></label>
-  <label>User prompt<textarea id="user" rows="4" placeholder="e.g. Explain UPI in 3 lines."></textarea></label>
+  <label><span id="userLbl">User prompt</span><textarea id="user" rows="4" placeholder="e.g. Explain UPI in 3 lines."></textarea></label>
   <div class="row">
     <label>Temperature<input id="temp" type="number" min="0" max="2" step="0.1" value="0.7" style="width:110px"></label>
     <label>Max length (tokens)<input id="maxTok" type="number" min="1" step="1" value="512" style="width:150px"></label>
     <label>Trials per model<input id="trials" type="number" min="1" max="10" step="1" value="1" style="width:120px"></label>
+    <label>Seed (optional)<input id="seed" type="number" step="1" placeholder="e.g. 42" style="width:130px"></label>
   </div>
 </section>
 
@@ -116,6 +122,10 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
   <div class="summary" id="summary">Run the models to see results here.</div>
   <div class="cards" id="cards"></div>
   <div id="table" hidden></div>
+  <div id="convoBar" hidden style="margin-top:14px">
+    <label>Next message to all models<textarea id="nextMsg" rows="2" placeholder="e.g. Now make it cheaper."></textarea></label>
+    <div class="row" style="margin-top:8px"><button type="button" class="btn small primary" id="sendNext">Send ▶</button><button type="button" class="btn small" id="newSession">⟲ New session</button><span class="empty" id="sessInfo"></span></div>
+  </div>
 </section>
 
 <section class="panel" aria-labelledby="p4">
@@ -154,7 +164,7 @@ const PROVIDERS = {
   groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"" },
   openrouter: { name:"OpenRouter", key:"openrouter_key", keyLink:"https://openrouter.ai/keys", kind:"openai", base:"https://openrouter.ai/api/v1", def:"", listNoKey:true },
   hf:         { name:"Hugging Face", key:"hf_token", keyLink:"https://huggingface.co/settings/tokens", kind:"openai", base:"https://router.huggingface.co/v1", def:"", listNoKey:true },
-  mistral:    { name:"Mistral", key:"mistral_key", keyLink:"https://console.mistral.ai/api-keys", kind:"openai", base:"https://api.mistral.ai/v1", def:"mistral-small-latest" },
+  mistral:    { name:"Mistral", key:"mistral_key", keyLink:"https://console.mistral.ai/api-keys", kind:"openai", base:"https://api.mistral.ai/v1", def:"mistral-small-latest", seedKey:"random_seed" },
   cohere:     { name:"Cohere", key:"cohere_key", keyLink:"https://dashboard.cohere.com/api-keys", kind:"openai", base:"https://api.cohere.ai/compatibility/v1", def:"command-a-03-2025", listUrl:"https://api.cohere.com/v1/models?endpoint=chat" },
   deepseek:   { name:"DeepSeek", key:"deepseek_key", keyLink:"https://platform.deepseek.com/api_keys", kind:"openai", base:"https://api.deepseek.com", def:"deepseek-chat", paid:true },
   together:   { name:"Together AI", key:"together_key", keyLink:"https://api.together.ai/settings/api-keys", kind:"openai", base:"https://api.together.xyz/v1", def:"", paid:true },
@@ -242,6 +252,8 @@ let results = {};      // row id -> latest attempt
 let log = [];          // evidence: {type:"RUN",at,text} or {type:"CALL",res}
 let runMeta = null;
 let attemptCount = {};
+let mode = "single";   // "single" | "convo"
+let convo = { id:1, turn:0, hist:{} };   // hist[rowId] = [{role,content}, …] (successful turns only)
 const newRunId = d => "run-" + stamp(d).slice(0,19).replace(/[-: ]/g,"").replace(/^(\d{8})/,"$1-");
 
 /* never let a key leak into copies or exports */
@@ -266,45 +278,70 @@ function errType(status, msg){
   return "HTTP " + status;
 }
 
-function buildRequest(r){
-  const sys = $("#sys").value, user = $("#user").value;
-  const temperature = Number($("#temp").value), maxTok = Number($("#maxTok").value);
+function settingsNow(){
+  const sv = $("#seed").value.trim();
+  return { temperature:Number($("#temp").value), max_tokens:Number($("#maxTok").value), seed: sv === "" ? null : Number(sv) };
+}
+
+function buildRequest(r, userText, history){
+  const sys = $("#sys").value, user = userText, hist = history || [];
+  const st = settingsNow(), { temperature, seed } = st, maxTok = st.max_tokens;
   const P = PROVIDERS[r.provider], base = baseOf(r), key = keyOf(r), kn = keyName(r);
-  const meta = { prompt:{ system:sys, user }, settings:{ temperature, max_tokens:maxTok } };
+  const settings = { ...st };
+  if (P.kind === "anthropic") { settings.temperature = Math.min(temperature, 1); if (seed !== null) settings.seedNote = "seed not supported by Anthropic; not sent"; }
+  const meta = { prompt:{ system:sys, user, historyMessages:hist.length }, settings };
   if (P.kind === "gemini") {
-    const body = { contents:[{ role:"user", parts:[{ text:user }] }], generationConfig:{ temperature, maxOutputTokens:maxTok } };
+    const contents = hist.map(m => ({ role:m.role === "assistant" ? "model" : "user", parts:[{ text:m.content }] }));
+    contents.push({ role:"user", parts:[{ text:user }] });
+    const body = { contents, generationConfig:{ temperature, maxOutputTokens:maxTok } };
+    if (seed !== null) body.generationConfig.seed = seed;
     if (sys.trim()) body.systemInstruction = { parts:[{ text:sys }] };
     return { ...meta, url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`, method:"POST",
       headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, shownHeaders:{ "Content-Type":"application/json", "x-goog-api-key":`<${kn}>` }, body };
   }
   if (P.kind === "anthropic") {
-    const body = { model:r.model, max_tokens:maxTok, temperature:Math.min(temperature, 1), messages:[{ role:"user", content:user }] };
+    const body = { model:r.model, max_tokens:maxTok, temperature:Math.min(temperature, 1), messages:[...hist.map(m => ({ role:m.role, content:m.content })), { role:"user", content:user }] };
     if (sys.trim()) body.system = sys;
     const h = anthHeaders(key);
     return { ...meta, url:`${base}/messages`, method:"POST", headers:{ "Content-Type":"application/json", ...h },
       shownHeaders:{ "Content-Type":"application/json", ...h, "x-api-key":`<${kn}>` }, body };
   }
-  const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys }); messages.push({ role:"user", content:user });
+  const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys });
+  hist.forEach(m => messages.push({ role:m.role, content:m.content })); messages.push({ role:"user", content:user });
+  const body = { model:r.model, messages, temperature, [P.maxKey || "max_tokens"]:maxTok };
+  if (seed !== null) body[P.seedKey || "seed"] = seed;
   return { ...meta, url:`${base}/chat/completions`, method:"POST",
-    headers:{ "Content-Type":"application/json", Authorization:"Bearer "+key }, shownHeaders:{ "Content-Type":"application/json", Authorization:`Bearer <${kn}>` },
-    body:{ model:r.model, messages, temperature, [P.maxKey || "max_tokens"]:maxTok } };
+    headers:{ "Content-Type":"application/json", Authorization:"Bearer "+key }, shownHeaders:{ "Content-Type":"application/json", Authorization:`Bearer <${kn}>` }, body };
 }
 
 function extract(r, j){
   const P = PROVIDERS[r.provider];
   if (P.kind === "gemini") {
     const c = (j.candidates||[])[0] || {}, u = j.usageMetadata || {};
-    return { text:(c.content?.parts||[]).map(p => p.text||"").join(""), finish:c.finishReason||"", id:j.responseId||"", modelReturned:j.modelVersion||"",
-      tokIn:u.promptTokenCount, tokOut:u.candidatesTokenCount, tokTotal:u.totalTokenCount };
+    const parts = c.content?.parts || [];
+    return { text:parts.filter(p => !p.thought).map(p => p.text||"").join(""), finish:c.finishReason||"", id:j.responseId||"", modelReturned:j.modelVersion||"",
+      tokIn:u.promptTokenCount, tokOut:u.candidatesTokenCount, tokThink:u.thoughtsTokenCount ?? null, tokTotal:u.totalTokenCount };
   }
   if (P.kind === "anthropic") {
     const u = j.usage || {};
     return { text:(j.content||[]).filter(b => b.type === "text").map(b => b.text).join(""), finish:j.stop_reason||"", id:j.id||"", modelReturned:j.model||"",
-      tokIn:u.input_tokens, tokOut:u.output_tokens, tokTotal:(u.input_tokens||0) + (u.output_tokens||0) };
+      tokIn:u.input_tokens, tokOut:u.output_tokens, tokThink:null, tokTotal:(u.input_tokens||0) + (u.output_tokens||0) };
   }
   const c = (j.choices||[])[0] || {}, u = j.usage || {};
-  return { text:c.message?.content ?? c.text ?? "", finish:c.finish_reason||"", id:j.id||"", modelReturned:j.model||"",
-    tokIn:u.prompt_tokens, tokOut:u.completion_tokens, tokTotal:u.total_tokens };
+  const thinkText = c.message?.reasoning || c.message?.reasoning_content || "";
+  return { text:c.message?.content ?? c.text ?? "", finish:c.finish_reason||"", id:j.id||"", modelReturned:j.model||"", host:j.provider||"",
+    tokIn:u.prompt_tokens, tokOut:u.completion_tokens, tokTotal:u.total_tokens,
+    tokThink:u.completion_tokens_details?.reasoning_tokens ?? (thinkText ? null : null), thinkText };
+}
+
+/* flags: settings problems that look like model failures, and refusals */
+const REFUSAL = /\b(I can(?:'|’)?t (?:help|assist|provide|do that|comply)|I cannot (?:help|assist|provide|comply)|I(?:'|’)m (?:not able|unable) to|I am (?:not able|unable) to|I won(?:'|’)t (?:be able|help|provide)|I must decline|I(?:'|’)m sorry,? but I can)/i;
+function flagsFor(res){
+  const f = [], cut = /^(length|max_tokens|MAX_TOKENS)$/.test(res.finish||""), thought = (res.tokThink||0) > 0 || !!res.thinkText;
+  if (!String(res.text||"").trim()) f.push(thought ? "Empty answer: thinking used up the max-length budget. Raise Max length." : cut ? "Empty answer: hit max length. Raise Max length." : "Empty answer");
+  else if (cut) f.push(`Cut off: hit max length${res.tokThink ? ` (thinking used ${res.tokThink} tokens)` : ""}. Raise Max length.`);
+  if (REFUSAL.test(String(res.text||"").slice(0,400))) f.push("Possible refusal (auto-detected; check the answer)");
+  return f;
 }
 
 /* checks before sending: catch config errors so they don't look like model failures */
@@ -320,12 +357,17 @@ function listWarning(r){
   return ids && !ids.includes(r.model) ? "Model id isn't in this provider's list; it may fail." : "";
 }
 
-async function runOne(r, idx, trial){
+async function runOne(r, idx, trial, userText, turn){
   if (!runMeta) runMeta = { id:newRunId(new Date()), at:new Date(), trials:1 };
-  const req = buildRequest(r), prev = results[r.id];
+  const prev = results[r.id];
+  userText = userText ?? prev?.userText ?? $("#user").value;
+  turn = turn ?? prev?.turn ?? (mode === "convo" ? convo.turn : null);
+  const history = mode === "convo" ? (convo.hist[r.id] || []).slice() : [];
+  const req = buildRequest(r, userText, history);
   const attempt = (attemptCount[r.id] = (attemptCount[r.id]||0) + 1);
   const res = { runId:runMeta.id, rowId:r.id, idx, label:label(r), provider:r.provider, model:r.model, state:"running", req, tab:prev?.tab || "answer",
-    attempt, trial:trial||null, warn:listWarning(r), sentAt:new Date() };
+    attempt, trial:trial||null, warn:listWarning(r), sentAt:new Date(), userText,
+    sessionId: mode === "convo" ? convo.id : null, turn: mode === "convo" ? turn : null, flags:[] };
   results[r.id] = res; log.push({ type:"CALL", res, at:res.sentAt }); renderResults(); renderLog(true);
   const bad = precheck(r);
   if (bad) { Object.assign(res, { state:"error", status:"–", ms:0, gotAt:new Date(), error:bad, errType:errType("–") }); renderResults(); renderLog(); return; }
@@ -338,6 +380,8 @@ async function runOne(r, idx, trial){
     if (http.ok && json) {
       Object.assign(res, extract(r, json)); res.state = "ok";
       res.words = (res.text.trim().match(/\S+/g)||[]).length; res.chars = res.text.length;
+      res.flags = flagsFor(res);
+      if (mode === "convo" && res.sessionId === convo.id) convo.hist[r.id] = [...history, { role:"user", content:userText }, { role:"assistant", content:res.text }];
     } else {
       res.state = "error"; res.error = (json && (json.error?.message || json.message || JSON.stringify(json.error||json))) || raw.slice(0,300) || ("HTTP " + http.status);
       res.errType = errType(http.status, res.error);
@@ -348,19 +392,50 @@ async function runOne(r, idx, trial){
   renderResults(); renderLog();
 }
 
+function busy(on){ ["#runAll","#rerunAll","#sendNext"].forEach(s => { $(s).disabled = on; }); }
+
 async function runAll(){
   if (!$("#user").value.trim()) { toast("Write a user prompt first"); $("#user").focus(); return; }
   if (!rows.length) { toast("Add at least one model"); return; }
-  const trials = Math.min(10, Math.max(1, parseInt($("#trials").value,10) || 1));
+  const trials = mode === "convo" ? 1 : Math.min(10, Math.max(1, parseInt($("#trials").value,10) || 1));
   results = {}; attemptCount = {};
-  const at = new Date();
-  runMeta = { id:newRunId(at), at, trials, sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
-  log.push({ type:"RUN", at, text:`${runMeta.id} started · ${rows.length} model(s) × ${trials} trial(s) · temperature ${runMeta.temp} · max ${runMeta.maxTok} tokens` }); renderLog(true);
-  $("#runAll").disabled = $("#rerunAll").disabled = true;
-  for (let t = 1; t <= trials; t++) await Promise.all(rows.map((r,i) => runOne(r, i+1, trials > 1 ? t : null)));
-  $("#runAll").disabled = $("#rerunAll").disabled = false; toast("All models finished");
+  if (mode === "convo") { convo = { id:convo.id + (convo.turn ? 1 : 0), turn:1, hist:{} }; }
+  const at = new Date(), st = settingsNow();
+  runMeta = { id:newRunId(at), at, trials, mode, sys:$("#sys").value, user:$("#user").value, temp:st.temperature, maxTok:st.max_tokens, seed:st.seed };
+  log.push({ type:"RUN", at, text:`${runMeta.id} started · ${mode === "convo" ? `conversation session ${convo.id}, turn 1` : "single turn"} · ${rows.length} model(s) × ${trials} trial(s) · temperature ${st.temperature} · max ${st.max_tokens} tokens${st.seed !== null ? ` · seed ${st.seed}` : ""}` }); renderLog(true);
+  busy(true);
+  for (let t = 1; t <= trials; t++) await Promise.all(rows.map((r,i) => runOne(r, i+1, trials > 1 ? t : null, $("#user").value, mode === "convo" ? 1 : null)));
+  busy(false); renderConvoBar(); toast("All models finished");
 }
 $("#runAll").onclick = runAll; $("#rerunAll").onclick = runAll;
+
+async function sendNext(){
+  const text = $("#nextMsg").value;
+  if (!convo.turn) { toast("Start the conversation with Run all first"); return; }
+  if (!text.trim()) { toast("Write the next message first"); $("#nextMsg").focus(); return; }
+  convo.turn++; attemptCount = {};
+  log.push({ type:"RUN", at:new Date(), text:`${runMeta.id} · session ${convo.id} · turn ${convo.turn} sent to ${rows.length} model(s)` }); renderLog(true);
+  busy(true);
+  await Promise.all(rows.map((r,i) => runOne(r, i+1, null, text, convo.turn)));
+  busy(false); $("#nextMsg").value = ""; renderConvoBar(); toast(`Turn ${convo.turn} finished`);
+}
+$("#sendNext").onclick = sendNext;
+$("#newSession").onclick = () => { convo = { id:convo.id + 1, turn:0, hist:{} }; results = {}; renderResults(); renderConvoBar(); toast(`New session ${convo.id}: write the first message and Run all`); };
+
+function renderConvoBar(){
+  $("#convoBar").hidden = mode !== "convo";
+  $("#sessInfo").textContent = convo.turn ? `Session ${convo.id} · ${convo.turn} turn(s) so far · each model keeps its own history` : `Session ${convo.id} · start with Run all`;
+}
+function setMode(m){
+  mode = m;
+  $("#mSingle").setAttribute("aria-pressed", m === "single"); $("#mConvo").setAttribute("aria-pressed", m === "convo");
+  $("#modeHint").textContent = m === "single" ? "Each run is a fresh, one-message test." : "Run all sends the first message; then send follow-ups. Each model keeps its own history; New session clears it.";
+  $("#userLbl").textContent = m === "single" ? "User prompt" : "First message";
+  $("#trials").disabled = m === "convo";
+  results = {}; convo = { id:convo.id + (convo.turn ? 1 : 0), turn:0, hist:{} };
+  renderResults(); renderConvoBar();
+}
+$("#mSingle").onclick = () => setMode("single"); $("#mConvo").onclick = () => setMode("convo");
 
 /* ---------- Results ---------- */
 let view = "cards";
@@ -369,14 +444,15 @@ $("#vTable").onclick = () => { view="table"; renderResults(); };
 
 const ordered = () => rows.map(r => results[r.id] && { r, res:results[r.id] }).filter(Boolean);
 const calls = () => log.filter(e => e.type === "CALL").map(e => e.res);
-const callsFor = (rowId, runId) => calls().filter(a => a.rowId === rowId && a.runId === runId);
+const callsFor = (rowId, runId) => calls().filter(a => a.rowId === rowId && a.runId === runId && a.turn === results[rowId]?.turn);
 
 function renderSummary(){
   const all = ordered().map(x => x.res);
   if (!all.length) { $("#summary").textContent = "Run the models to see results here."; return; }
-  const ok = all.filter(x => x.state==="ok"), bad = all.filter(x => x.state==="error"), run = all.filter(x => x.state==="running");
+  const ok = all.filter(x => x.state==="ok"), bad = all.filter(x => x.state==="error"), run = all.filter(x => x.state==="running"), fl = ok.filter(x => x.flags.length);
   const fastest = ok.slice().sort((a,b) => a.ms-b.ms)[0], longest = ok.slice().sort((a,b) => b.words-a.words)[0], shortest = ok.slice().sort((a,b) => a.words-b.words)[0];
-  $("#summary").innerHTML = (runMeta ? `<b>${esc(runMeta.id)}</b> · ` : "") + `${all.length} model(s) · <span class="ok">${ok.length} ok</span> · <span class="bad">${bad.length} failed</span>${run.length?` · <span class="run">${run.length} running</span>`:""}`
+  $("#summary").innerHTML = (runMeta ? `<b>${esc(runMeta.id)}</b> · ` : "") + (mode === "convo" && convo.turn ? `session ${convo.id}, turn ${convo.turn} · ` : "")
+    + `${all.length} model(s) · <span class="ok">${ok.length} ok</span> · <span class="bad">${bad.length} failed</span>${fl.length?` · <span class="run">${fl.length} flagged</span>`:""}${run.length?` · <span class="run">${run.length} running</span>`:""}`
     + (fastest ? ` · fastest <b>${esc(fastest.label)}</b> ${fastest.ms} ms` : "")
     + (longest ? ` · longest <b>${esc(longest.label)}</b> ${longest.words} words` : "")
     + (shortest && ok.length > 1 ? ` · shortest <b>${esc(shortest.label)}</b> ${shortest.words} words` : "");
@@ -384,18 +460,28 @@ function renderSummary(){
 
 function pretty(x){ try { return JSON.stringify(typeof x === "string" ? JSON.parse(x) : x, null, 2); } catch (e) { return String(x ?? ""); } }
 const at = d => d ? stamp(d) + " " + tz : "–";
-const reqText = a => `REQUEST · sent ${at(a.sentAt)}\n${a.req.method} ${a.req.url}\n${Object.entries(a.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(a.req.body)}`;
+const setTxt = a => { const s = a.req.settings; return `temp ${s.temperature} · max ${s.max_tokens}${s.seed !== null && s.seed !== undefined ? ` · seed ${s.seed}${s.seedNote ? " (not sent)" : ""}` : ""}`; };
+const reqText = a => `REQUEST · sent ${at(a.sentAt)}${a.turn ? ` · session ${a.sessionId}, turn ${a.turn} (${a.req.prompt.historyMessages} earlier messages included)` : ""}\n${a.req.method} ${a.req.url}\n${Object.entries(a.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(a.req.body)}`;
 const resText = a => a.state === "running" ? "RESPONSE · waiting…" :
-  `RESPONSE · received ${at(a.gotAt)} · ${a.ms} ms · status ${a.status}${a.errType ? "\nError type: " + a.errType : ""}${a.error ? "\nError: " + a.error : ""}\n\n${a.raw ? pretty(a.raw) : "(no response body)"}`;
+  `RESPONSE · received ${at(a.gotAt)} · ${a.ms} ms · status ${a.status}${a.host ? " · answered by " + a.host : ""}${a.errType ? "\nError type: " + a.errType : ""}${a.error ? "\nError: " + a.error : ""}${a.flags?.length ? "\nFlags: " + a.flags.join(" | ") : ""}\n\n${a.raw ? pretty(a.raw) : "(no response body)"}`;
+const flagHtml = res => (res.flags||[]).map(f => `<span class="flag">⚠ ${esc(f)}</span>`).join("");
+
+function transcript(res){
+  const h = (mode === "convo" && res.sessionId === convo.id) ? (convo.hist[res.rowId] || []) : [];
+  let html = h.map(m => `<div class="msg"><b>${m.role === "user" ? "You" : "AI"}</b>${esc(m.content || "(empty answer)")}</div>`).join("");
+  if (res.state !== "ok") html += `<div class="msg"><b>You</b>${esc(res.userText)}</div>` + (res.state === "running" ? `<p class="empty">Waiting for the answer…</p>` : `<p class="etype bad">${esc(res.errType||"")}</p><p class="bad">${esc(res.error)}</p>`);
+  return html;
+}
 
 function cardBody(res){
+  if (res.tab === "answer" && mode === "convo" && res.turn) return transcript(res) + (res.state === "ok" ? flagHtml(res) : "");
   if (res.state === "running") return `<p class="empty">Waiting for the answer…</p>`;
-  if (res.tab === "answer") return res.state === "ok" ? `<div class="answer">${esc(res.text || "(empty answer)")}</div>` : `<p class="etype bad">${esc(res.errType||"")}</p><p class="bad">${esc(res.error)}</p>`;
+  if (res.tab === "answer") return res.state === "ok" ? `${flagHtml(res)}<div class="answer">${esc(res.text || "(empty answer)")}</div>` : `<p class="etype bad">${esc(res.errType||"")}</p><p class="bad">${esc(res.error)}</p>`;
   if (res.tab === "request") return `<pre>${esc(reqText(res))}</pre>`;
   if (res.tab === "response") return `<pre>${esc(resText(res))}</pre>`;
-  const kv = [["Run id", res.runId], ["Attempt", res.attempt + (res.trial ? ` (trial ${res.trial})` : "")], ["Provider", res.label.split(" · ")[0]], ["Model asked", res.model], ["Model returned", res.modelReturned], ["Response id", res.id], ["Finish reason", res.finish],
-    ["Tokens in", res.tokIn], ["Tokens out", res.tokOut], ["Tokens total", res.tokTotal], ["Time", res.ms != null ? res.ms + " ms" : ""], ["Words", res.words], ["Characters", res.chars],
-    ["Sent", res.sentAt ? stamp(res.sentAt) : ""], ["Received", res.gotAt ? stamp(res.gotAt) : ""], ["HTTP status", res.status], ["Error type", res.errType]];
+  const kv = [["Run id", res.runId], ["Session / turn", res.turn ? `${res.sessionId} / ${res.turn}` : "single turn"], ["Attempt", res.attempt + (res.trial ? ` (trial ${res.trial})` : "")], ["Provider", res.label.split(" · ")[0]], ["Answered by (host)", res.host], ["Model asked", res.model], ["Model returned", res.modelReturned], ["Response id", res.id], ["Finish reason", res.finish],
+    ["Settings", setTxt(res)], ["Tokens in", res.tokIn], ["Tokens out", res.tokOut], ["Thinking tokens", res.tokThink ?? (res.thinkText ? "yes (count not given)" : "")], ["Tokens total", res.tokTotal], ["Time", res.ms != null ? res.ms + " ms" : ""], ["Words", res.words], ["Characters", res.chars],
+    ["Sent", res.sentAt ? stamp(res.sentAt) : ""], ["Received", res.gotAt ? stamp(res.gotAt) : ""], ["HTTP status", res.status], ["Error type", res.errType], ["Flags", (res.flags||[]).join(" | ")]];
   return `<div class="kv">${kv.map(([k,v]) => `<span>${k}</span><span>${esc(v ?? "–") || "–"}</span>`).join("")}</div>`;
 }
 
@@ -405,8 +491,8 @@ function renderResults(){
   $("#vCards").setAttribute("aria-pressed", view==="cards"); $("#vTable").setAttribute("aria-pressed", view==="table");
   $("#cards").hidden = view !== "cards"; $("#table").hidden = view !== "table";
   if (view === "table") {
-    $("#table").innerHTML = list.length ? `<table><thead><tr><th>#</th><th>Provider · model</th><th>Attempt</th><th>Status</th><th>Error type</th><th>Time</th><th>In</th><th>Out</th><th>Total</th><th>Words</th><th>Finish</th></tr></thead><tbody>${
-      list.map(({res}) => `<tr><td>${res.idx}</td><td>${esc(res.label)}</td><td class="num">${res.attempt}</td><td class="${res.state==="ok"?"ok":res.state==="error"?"bad":"run"}">${esc(res.state==="running"?"running":res.status)}</td><td>${esc(res.errType||"–")}</td><td class="num">${res.ms!=null?res.ms+" ms":"–"}</td><td class="num">${res.tokIn??"–"}</td><td class="num">${res.tokOut??"–"}</td><td class="num">${res.tokTotal??"–"}</td><td class="num">${res.words??"–"}</td><td>${esc(res.finish || (res.state==="error"?"error":"–"))}</td></tr>`).join("")
+    $("#table").innerHTML = list.length ? `<table><thead><tr><th>#</th><th>Provider · model</th>${mode==="convo"?"<th>Turn</th>":""}<th>Attempt</th><th>Status</th><th>Error type</th><th>Flags</th><th>Time</th><th>In</th><th>Out</th><th>Thinking</th><th>Words</th><th>Finish</th></tr></thead><tbody>${
+      list.map(({res}) => `<tr><td>${res.idx}</td><td>${esc(res.label)}${res.host?`<br><span class="empty">via ${esc(res.host)}</span>`:""}</td>${mode==="convo"?`<td class="num">${res.turn??"–"}</td>`:""}<td class="num">${res.attempt}</td><td class="${res.state==="ok"?"ok":res.state==="error"?"bad":"run"}">${esc(res.state==="running"?"running":res.status)}</td><td>${esc(res.errType||"–")}</td><td class="${res.flags?.length?"run":""}">${esc((res.flags||[]).map(f => f.split(":")[0].split(" (")[0]).join(", ") || "–")}</td><td class="num">${res.ms!=null?res.ms+" ms":"–"}</td><td class="num">${res.tokIn??"–"}</td><td class="num">${res.tokOut??"–"}</td><td class="num">${res.tokThink??"–"}</td><td class="num">${res.words??"–"}</td><td>${esc(res.finish || (res.state==="error"?"error":"–"))}</td></tr>`).join("")
     }</tbody></table>` : `<p class="empty">No results yet.</p>`;
     return;
   }
@@ -418,15 +504,16 @@ function renderResults(){
     const hist = callsFor(r.id, res.runId).filter(a => a.state !== "running");
     el.innerHTML = `
       <div class="head"><span class="title">${res.idx}. ${esc(res.label)}</span>
-        <span class="stat">${statusTxt} · attempt ${res.attempt}${res.trial?` (trial ${res.trial})`:""}</span>
-        ${res.state==="ok" ? `<span class="stat">in ${res.tokIn??"–"} · out ${res.tokOut??"–"} · ${res.words} words · finish: ${esc(res.finish||"–")}</span>` : ""}
+        <span class="stat">${statusTxt}${res.turn ? ` · turn ${res.turn}` : ""} · attempt ${res.attempt}${res.trial?` (trial ${res.trial})`:""}${res.flags?.length ? ` · <span class="run">⚠ flagged</span>` : ""}</span>
+        ${res.state==="ok" ? `<span class="stat">in ${res.tokIn??"–"} · out ${res.tokOut??"–"}${res.tokThink ? ` (thinking ${res.tokThink})` : ""} · ${res.words} words · finish: ${esc(res.finish||"–")}${res.host ? ` · via ${esc(res.host)}` : ""}</span>` : ""}
+        <span class="stat empty" style="font-size:12px">${esc(setTxt(res))}</span>
         ${res.warn ? `<span class="stat run">⚠ ${esc(res.warn)}</span>` : ""}
         ${hist.length > 1 ? `<span class="attempts">All attempts: ${hist.map(a => `#${a.attempt} ${a.state==="ok"?"✓":"✗"} ${esc(a.status)} ${a.ms}ms`).join(" · ")}</span>` : ""}</div>
       <div class="tabs" role="tablist">${["answer","request","response","info"].map(t => `<button type="button" role="tab" aria-selected="${res.tab===t}" data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join("")}</div>
       <div class="body">${cardBody(res)}</div>
       <div class="foot">${res.state==="error" ? `<button type="button" class="btn small primary" data-retry>⟲ Retry</button>` : `<button type="button" class="btn small" data-retry ${res.state==="running"?"disabled":""}>⟲ Re-run</button>`}<button type="button" class="btn small" data-copy ${res.state==="running"?"disabled":""}>Copy</button></div>`;
     el.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { res.tab = b.dataset.t; renderResults(); });
-    el.querySelector("[data-retry]").onclick = () => runOne(r, res.idx, null);
+    el.querySelector("[data-retry]").onclick = () => runOne(r, res.idx, null, res.userText, res.turn);
     el.querySelector("[data-copy]").onclick = () => copy(mdForResult(res), "Copied this model's evidence");
     box.appendChild(el);
   });
@@ -436,8 +523,8 @@ function renderResults(){
 const openLog = new Set();
 $("#log").addEventListener("toggle", e => { const k = e.target.dataset.k; if (k) e.target.open ? openLog.add(k) : openLog.delete(k); }, true);
 function logLine(a){
-  const st = a.state === "running" ? "waiting…" : a.state === "ok" ? `✓ ${a.status}` : `✗ ${a.status} · ${a.errType||""}`;
-  return `${stamp(a.sentAt)} ${tz} · ${a.idx}. ${a.label} · attempt ${a.attempt}${a.trial?` (trial ${a.trial})`:""} · ${st}${a.ms!=null?` · ${a.ms} ms`:""}`;
+  const st = a.state === "running" ? "waiting…" : a.state === "ok" ? `✓ ${a.status}${a.flags?.length ? " ⚠ flagged" : ""}` : `✗ ${a.status} · ${a.errType||""}`;
+  return `${stamp(a.sentAt)} ${tz} · ${a.idx}. ${a.label}${a.turn ? ` · session ${a.sessionId} turn ${a.turn}` : ""} · attempt ${a.attempt}${a.trial?` (trial ${a.trial})`:""} · ${st}${a.ms!=null?` · ${a.ms} ms`:""}`;
 }
 function renderLog(scroll){
   const box = $("#log");
@@ -451,32 +538,44 @@ $("#clearLog").onclick = () => { log = []; openLog.clear(); renderLog(); renderR
 
 const fence = (lang, s) => "```" + lang + "\n" + s + "\n```";
 function mdForResult(res){
-  const lines = [`### ${res.idx}. ${res.label} · attempt ${res.attempt}${res.trial?` (trial ${res.trial})`:""}`, "",
+  const lines = [`### ${res.idx}. ${res.label}${res.turn ? ` · session ${res.sessionId}, turn ${res.turn}` : ""} · attempt ${res.attempt}${res.trial?` (trial ${res.trial})`:""}`, "",
     `| Field | Value |`, `|---|---|`,
-    ...[["Run id", res.runId], ["Status", res.status], ["Error type", res.errType||"–"], ["Time", res.ms!=null?res.ms+" ms":"–"], ["Sent", at(res.sentAt)], ["Received", at(res.gotAt)],
-       ["Model asked", res.model], ["Model returned", res.modelReturned||"–"], ["Response id", res.id||"–"], ["Finish reason", res.finish||"–"],
-       ["Temperature / max tokens", `${res.req.settings.temperature} / ${res.req.settings.max_tokens}`],
-       ["Tokens in / out / total", `${res.tokIn??"–"} / ${res.tokOut??"–"} / ${res.tokTotal??"–"}`], ["Words / characters", `${res.words??"–"} / ${res.chars??"–"}`]].map(([k,v]) => `| ${k} | ${String(v??"–").replace(/\|/g,"\\|")} |`),
+    ...[["Run id", res.runId], ["Status", res.status], ["Error type", res.errType||"–"], ["Flags", (res.flags||[]).join("; ")||"–"], ["Time", res.ms!=null?res.ms+" ms":"–"], ["Sent", at(res.sentAt)], ["Received", at(res.gotAt)],
+       ["Model asked", res.model], ["Model returned", res.modelReturned||"–"], ["Answered by (host)", res.host||"–"], ["Response id", res.id||"–"], ["Finish reason", res.finish||"–"],
+       ["Settings", setTxt(res)], ["Earlier messages sent", res.req.prompt.historyMessages],
+       ["Tokens in / out / thinking / total", `${res.tokIn??"–"} / ${res.tokOut??"–"} / ${res.tokThink??"–"} / ${res.tokTotal??"–"}`], ["Words / characters", `${res.words??"–"} / ${res.chars??"–"}`]].map(([k,v]) => `| ${k} | ${String(v??"–").replace(/\|/g,"\\|")} |`),
+    "", "**Message**", "", fence("text", res.userText || ""),
     "", "**Answer**", "", res.state==="ok" ? fence("text", res.text) : `Error: ${res.error}`,
     "", "**Request**", "", fence("http", reqText(res)),
     "", "**Response**", "", fence("json", resText(res)), ""];
   return lines.join("\n");
 }
+function transcriptMd(){
+  return ordered().map(({r, res}) => {
+    const h = convo.hist[r.id] || [];
+    return `### ${res.idx}. ${res.label}\n\n` + h.map((m,i) => `**${m.role === "user" ? `You (turn ${Math.floor(i/2)+1})` : "AI"}:**\n\n${m.content}`).join("\n\n")
+      + (res.state !== "ok" ? `\n\n**You (turn ${res.turn}):**\n\n${res.userText}\n\n**Failed:** ${res.status} · ${res.errType||""} · ${res.error||""}` : "");
+  }).join("\n\n---\n\n");
+}
 function fullMd(){
   const list = ordered().map(x => x.res), all = calls();
-  const m = runMeta || { id:"–", at:new Date(), trials:1, sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
+  const m = runMeta || { id:"–", at:new Date(), trials:1, mode, sys:$("#sys").value, user:$("#user").value, ...settingsNow() };
   return mask([`# Model comparison: evidence`, "",
-    `- Run id: ${m.id}`, `- Generated: ${stamp(new Date())} ${tz}`, `- Run started: ${stamp(m.at)} ${tz}`, `- Tool: API Bench · Compare models`,
-    `- Temperature: ${m.temp} · Max length: ${m.maxTok} tokens · Trials per model: ${m.trials}`,
-    `- Keys: saved only in the browser, sent directly to each provider; shown here as placeholders such as \`<groq_key>\`.`, "",
-    "## Prompt", "", "**System / role**", "", fence("text", m.sys || "(none)"), "", "**User**", "", fence("text", m.user || ""), "",
-    "## Comparison (latest attempt per model)", "", "| # | Provider · model | Attempt | Status | Error type | Time (ms) | Tokens in | Tokens out | Words | Finish |", "|---|---|---|---|---|---|---|---|---|---|",
-    ...list.map(r => `| ${r.idx} | ${r.label} | ${r.attempt} | ${r.status??r.state} | ${r.errType||"–"} | ${r.ms??"–"} | ${r.tokIn??"–"} | ${r.tokOut??"–"} | ${r.words??"–"} | ${r.finish || (r.state==="error"?"error":"–")} |`), "",
+    `- Run id: ${m.id}`, `- Mode: ${m.mode === "convo" ? `conversation (session ${convo.id}, ${convo.turn} turn(s)); each model keeps its own history` : "single turn"}`,
+    `- Generated: ${stamp(new Date())} ${tz}`, `- Run started: ${stamp(m.at)} ${tz}`, `- Tool: API Bench · Compare models`,
+    `- Temperature: ${m.temp} · Max length: ${m.maxTok} tokens · Seed: ${m.seed ?? "none"} · Trials per model: ${m.trials}`,
+    `- Keys: saved only in the browser, sent directly to each provider; shown here as placeholders such as \`<groq_key>\`.`,
+    `- Flags are automatic checks (empty or cut-off answers, possible refusals); confirm by reading the answer.`, "",
+    "## Prompt", "", "**System / role**", "", fence("text", m.sys || "(none)"), "", `**${m.mode === "convo" ? "First message" : "User"}**`, "", fence("text", m.user || ""), "",
+    ...(m.mode === "convo" ? ["## Conversation transcripts", "", transcriptMd(), ""] : []),
+    "## Comparison (latest attempt per model)", "", "| # | Provider · model | Attempt | Status | Error type | Flags | Time (ms) | Tokens in | Tokens out | Thinking | Words | Finish |", "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ...list.map(r => `| ${r.idx} | ${r.label}${r.host?` (via ${r.host})`:""} | ${r.attempt} | ${r.status??r.state} | ${r.errType||"–"} | ${(r.flags||[]).join("; ")||"–"} | ${r.ms??"–"} | ${r.tokIn??"–"} | ${r.tokOut??"–"} | ${r.tokThink??"–"} | ${r.words??"–"} | ${r.finish || (r.state==="error"?"error":"–")} |`), "",
     `## All attempts in time order (${all.length}), full request and response`, "", ...all.map(mdForResult),
     "## Timeline", "", ...log.map(e => `- ${e.type==="RUN" ? `${stamp(e.at)} ${tz} · RUN · ${e.text}` : logLine(e.res)}`), ""].join("\n"));
 }
 function answersMd(){
-  return mask(ordered().map(({res}) => `## ${res.idx}. ${res.label}\n${res.state==="ok" ? `(${res.ms} ms · ${res.tokOut??"–"} tokens out)\n\n${res.text}` : `Failed: ${res.status} · ${res.errType||""}\n${res.error||""}`}`).join("\n\n---\n\n"));
+  if (mode === "convo" && convo.turn) return mask(transcriptMd());
+  return mask(ordered().map(({res}) => `## ${res.idx}. ${res.label}\n${res.state==="ok" ? `(${res.ms} ms · ${res.tokOut??"–"} tokens out${res.flags.length ? " · ⚠ " + res.flags.join("; ") : ""})\n\n${res.text}` : `Failed: ${res.status} · ${res.errType||""}\n${res.error||""}`}`).join("\n\n---\n\n"));
 }
 function runJson(){
   const m = runMeta || {};
@@ -484,13 +583,14 @@ function runJson(){
   return mask(JSON.stringify({
     tool:"API Bench · Compare models", generatedAt:new Date().toISOString(), timezone:tz,
     keyHandling:"Keys are saved only in the browser and sent directly to each provider; replaced here by placeholders.",
-    run:{ id:m.id||null, startedAt:iso(m.at), trialsPerModel:m.trials||1, prompt:{ system:m.sys??"", user:m.user??"" }, settings:{ temperature:Number(m.temp), max_tokens:Number(m.maxTok) } },
-    attempts: calls().map(a => ({ runId:a.runId, modelNo:a.idx, provider:a.provider, model:a.model, attempt:a.attempt, trial:a.trial,
-      sentAt:iso(a.sentAt), receivedAt:iso(a.gotAt), latencyMs:a.ms ?? null, httpStatus:a.status ?? null, requestOk:a.state==="ok", errorType:a.errType||null, error:a.error||null,
+    run:{ id:m.id||null, mode:m.mode||mode, startedAt:iso(m.at), trialsPerModel:m.trials||1, prompt:{ system:m.sys??"", firstMessage:m.user??"" }, settings:{ temperature:Number(m.temp), max_tokens:Number(m.maxTok), seed:m.seed ?? null } },
+    conversation: (m.mode === "convo") ? { sessionId:convo.id, turns:convo.turn, historyPerModel:Object.fromEntries(ordered().map(({r,res}) => [`${res.idx}. ${res.label}`, convo.hist[r.id] || []])) } : null,
+    attempts: calls().map(a => ({ runId:a.runId, sessionId:a.sessionId, turn:a.turn, modelNo:a.idx, provider:a.provider, model:a.model, answeredByHost:a.host||null, attempt:a.attempt, trial:a.trial,
+      sentAt:iso(a.sentAt), receivedAt:iso(a.gotAt), latencyMs:a.ms ?? null, httpStatus:a.status ?? null, requestOk:a.state==="ok", errorType:a.errType||null, error:a.error||null, flags:a.flags||[],
       prompt:a.req.prompt, settings:a.req.settings,
       request:{ method:a.req.method, url:a.req.url, headers:a.req.shownHeaders, body:a.req.body },
       response:{ body:a.json ?? a.raw ?? null },
-      extracted: a.state==="ok" ? { text:a.text, finishReason:a.finish, responseId:a.id, modelReturned:a.modelReturned, tokensIn:a.tokIn, tokensOut:a.tokOut, tokensTotal:a.tokTotal, words:a.words, chars:a.chars } : null }))
+      extracted: a.state==="ok" ? { text:a.text, finishReason:a.finish, responseId:a.id, modelReturned:a.modelReturned, tokensIn:a.tokIn, tokensOut:a.tokOut, tokensThinking:a.tokThink ?? null, tokensTotal:a.tokTotal, words:a.words, chars:a.chars } : null }))
   }, null, 2));
 }
 
@@ -524,7 +624,7 @@ function download(text, ext, type){
 $("#dlMd").onclick = () => { if (hasCalls()) download(fullMd(), "md", "text/markdown"); };
 $("#dlJson").onclick = () => { if (hasCalls()) download(runJson(), "json", "application/json"); };
 
-renderModels(); renderResults();
+renderModels(); renderResults(); renderConvoBar();
 </script>
 </body>
 </html>
