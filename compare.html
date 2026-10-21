@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare models · API Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#eef1f4;--panel:#fff;--sunk:#f5f7f9;--ink:#17212b;--muted:#5a6775;--line:#d9dee4;
+  --accent:#0f766e;--accent-ink:#fff;--accent-soft:#e3f2f0;--ok:#18794e;--warn:#a16207;--bad:#b91c1c;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#0f151b;--panel:#161f28;--sunk:#111920;--ink:#e4eaf0;--muted:#94a2b0;--line:#283440;--accent:#2dd4bf;--accent-ink:#06201d;--accent-soft:#12332f;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-ui)}
+a{color:var(--accent)}
+.wrap{max-width:1400px;margin:0 auto;padding:16px 24px 64px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+header h1{margin:0;font-size:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;gap:10px;align-items:center}
+.panel h2 .n{background:var(--ink);color:var(--panel);border-radius:6px;padding:0 7px;letter-spacing:0}
+label{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:4px}
+input,select,textarea{font:14px/1.4 var(--font-ui);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-height:36px}
+textarea{font-family:var(--font-mono);font-size:13px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.grow{flex:1 1 260px}
+.btn{font:600 14px/1 var(--font-ui);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:9px 14px;min-height:36px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:6px 10px;min-height:30px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.models{display:flex;flex-direction:column;gap:8px}
+.mrow{display:grid;grid-template-columns:28px 150px minmax(200px,1.4fr) minmax(180px,1fr) 32px;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk)}
+.mrow .idx{font:600 13px var(--font-mono);color:var(--muted);text-align:center}
+.mrow .custom{grid-column:2 / 5;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mrow .hint{grid-column:2 / 5;font-size:12px;color:var(--muted)}
+.keyok{color:var(--ok)}.keybad{color:var(--bad)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--panel);color:var(--ink);font:600 13px var(--font-ui);padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.summary{font-size:14px;padding:10px 12px;background:var(--accent-soft);border-radius:8px}
+.cards{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.card{flex:0 0 380px;border:1px solid var(--line);border-radius:10px;background:var(--panel);display:flex;flex-direction:column;max-height:720px}
+.card .head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.card .title{font-weight:700;font-size:14px;word-break:break-all}
+.card .stat{font:13px var(--font-mono);color:var(--muted)}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}.run{color:var(--warn);font-weight:700}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:transparent;color:var(--muted);font:600 12px var(--font-ui);padding:8px 4px;cursor:pointer;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.body{padding:12px 14px;overflow:auto;flex:1;min-height:160px}
+.answer{white-space:pre-wrap;font-size:14px;line-height:1.55}
+pre{margin:0;font:12px/1.5 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:4px 10px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+.card .foot{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+td.num{font-family:var(--font-mono)}
+.log{font:12px/1.6 var(--font-mono);max-height:320px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
+.empty{color:var(--muted);font-size:14px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (max-width:760px){.wrap{padding:12px}.mrow{grid-template-columns:24px minmax(0,1fr) 36px}.mrow>*{min-width:0}.mrow [data-del]{grid-row:1;grid-column:3}.mrow>*:nth-child(3),.mrow>*:nth-child(4),.mrow .custom,.mrow .hint{grid-column:2 / 4}.card{flex-basis:300px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><a href="./">← API Bench</a><h1>Compare models</h1></div>
+  <span class="empty">Same prompt to several Gen AI models. Keys stay in this browser and are shared with API Bench.</span>
+</header>
+
+<section class="panel" aria-labelledby="p1">
+  <h2 id="p1"><span class="n">1</span>Prompt (same for all models)</h2>
+  <label>System / role<textarea id="sys" rows="2" placeholder="e.g. You are a payments product manager. Answer briefly."></textarea></label>
+  <label>User prompt<textarea id="user" rows="4" placeholder="e.g. Explain UPI in 3 lines."></textarea></label>
+  <div class="row">
+    <label>Temperature<input id="temp" type="number" min="0" max="2" step="0.1" value="0.7" style="width:110px"></label>
+    <label>Max length (tokens)<input id="maxTok" type="number" min="1" step="1" value="512" style="width:150px"></label>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="p2">
+  <h2 id="p2"><span class="n">2</span>Models</h2>
+  <div class="models" id="models"></div>
+  <div class="toolbar">
+    <button type="button" class="btn" id="addModel">+ Add model</button>
+    <button type="button" class="btn primary" id="runAll">▶ Run all</button>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="p3">
+  <div class="toolbar">
+    <h2 id="p3"><span class="n">3</span>Results</h2>
+    <div class="row">
+      <div class="seg" role="group" aria-label="View"><button type="button" id="vCards" aria-pressed="true">Cards</button><button type="button" id="vTable" aria-pressed="false">Table</button></div>
+      <button type="button" class="btn small" id="rerunAll">⟲ Run again</button>
+    </div>
+  </div>
+  <div class="summary" id="summary">Run the models to see results here.</div>
+  <div class="cards" id="cards"></div>
+  <div id="table" hidden></div>
+</section>
+
+<section class="panel" aria-labelledby="p4">
+  <div class="toolbar">
+    <h2 id="p4"><span class="n">4</span>Evidence log</h2>
+    <div class="row">
+      <button type="button" class="btn small" id="copyMd">Copy as Markdown</button>
+      <button type="button" class="btn small" id="dlMd">Download .md</button>
+      <button type="button" class="btn small" id="clearLog">Clear</button>
+    </div>
+  </div>
+  <div class="log" id="log"><span class="empty">Every request and response is recorded here with timestamps.</span></div>
+</section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const toast = m => { const t=$("#toast"); t.textContent=m; t.classList.add("on"); setTimeout(()=>t.classList.remove("on"),1800); };
+const tz = (()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return "local"}})();
+const stamp = d => { const p=(n,l=2)=>String(n).padStart(l,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(),3)}`; };
+
+/* ---------- Providers ---------- */
+const PROVIDERS = {
+  gemini:     { name:"Gemini", key:"gemini_key", keyLink:"https://aistudio.google.com/apikey", kind:"gemini", base:"https://generativelanguage.googleapis.com/v1beta", def:"gemini-3.5-flash-lite" },
+  groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"" },
+  openrouter: { name:"OpenRouter", key:"openrouter_key", keyLink:"https://openrouter.ai/keys", kind:"openai", base:"https://openrouter.ai/api/v1", def:"", listNoKey:true },
+  hf:         { name:"Hugging Face", key:"hf_token", keyLink:"https://huggingface.co/settings/tokens", kind:"openai", base:"https://router.huggingface.co/v1", def:"", listNoKey:true },
+  custom:     { name:"Custom (OpenAI-compatible)", key:null, kind:"openai", base:"", def:"" }
+};
+const secret = k => store.get("apibench.secret."+k, "");
+const setSecret = (k,v) => store.set("apibench.secret."+k, v);
+const modelCache = {};
+
+async function listModels(r){
+  const P = PROVIDERS[r.provider], base = baseOf(r), key = keyOf(r);
+  const cacheKey = r.provider + "|" + base;
+  if (modelCache[cacheKey]) return modelCache[cacheKey];
+  if (!base) throw new Error("Enter the base URL first");
+  if (!key && !P.listNoKey) throw new Error("Add a key to load the model list");
+  let ids = [];
+  if (P.kind === "gemini") {
+    const res = await fetch(base + "/models?pageSize=200", { headers:{ "x-goog-api-key": key } });
+    const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || res.status);
+    ids = (j.models||[]).filter(m => (m.supportedGenerationMethods||[]).includes("generateContent")).map(m => m.name.replace(/^models\//,""));
+  } else {
+    const res = await fetch(base + "/models", { headers: key ? { Authorization:"Bearer "+key } : {} });
+    const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || res.status);
+    ids = (j.data||[]).map(m => m.id).filter(Boolean);
+    if (r.provider === "groq") ids = ids.filter(id => !/whisper|tts|guard|playai/i.test(id));
+  }
+  ids.sort((a,b) => (b.endsWith(":free") - a.endsWith(":free")) || a.localeCompare(b));
+  return (modelCache[cacheKey] = ids);
+}
+const baseOf = r => (r.provider === "custom" ? (r.base||"").replace(/\/+$/,"") : PROVIDERS[r.provider].base);
+const keyOf = r => r.provider === "custom" ? (r.key||"") : secret(PROVIDERS[r.provider].key);
+const keyName = r => r.provider === "custom" ? "custom_key" : PROVIDERS[r.provider].key;
+const label = r => `${r.provider === "custom" ? (r.customName || "Custom") : PROVIDERS[r.provider].name} · ${r.model || "(no model)"}`;
+
+/* ---------- Model rows ---------- */
+let rows = store.get("apibench.compare.rows", null) || [
+  { provider:"gemini", model:PROVIDERS.gemini.def }, { provider:"groq", model:"" }, { provider:"openrouter", model:"" }
+];
+rows.forEach(r => { r.id = r.id || Math.random().toString(36).slice(2,9); });
+const saveRows = () => store.set("apibench.compare.rows", rows.map(({id,provider,model,base,customName}) => ({id,provider,model,base,customName})));
+
+function renderModels(){
+  const box = $("#models"); box.innerHTML = "";
+  rows.forEach((r, i) => {
+    const P = PROVIDERS[r.provider], hasKey = !!keyOf(r);
+    const el = document.createElement("div"); el.className = "mrow";
+    el.innerHTML = `
+      <span class="idx">${i+1}</span>
+      <select aria-label="Provider ${i+1}">${Object.entries(PROVIDERS).map(([k,v]) => `<option value="${k}" ${k===r.provider?"selected":""}>${esc(v.name)}</option>`).join("")}</select>
+      <span style="display:flex;gap:6px"><input aria-label="Model ${i+1}" list="dl-${r.id}" value="${esc(r.model||"")}" placeholder="Model id (type, or load list)" style="flex:1"><datalist id="dl-${r.id}"></datalist><button type="button" class="btn small" data-load>Load list</button></span>
+      <span>${r.provider==="custom" ? "" : `<input aria-label="Key ${i+1}" type="password" value="${esc(secret(P.key))}" placeholder="API key" style="width:100%"><span class="${hasKey?"keyok":"keybad"}" style="font-size:12px">${hasKey?"✓ key saved in this browser":`✗ no key · <a href="${P.keyLink}" target="_blank" rel="noopener">get one</a>`}</span>`}</span>
+      <button type="button" class="btn small" aria-label="Remove model ${i+1}" data-del>✕</button>
+      ${r.provider==="custom" ? `<div class="custom"><input aria-label="Name" placeholder="Name, e.g. Mistral" value="${esc(r.customName||"")}" data-f="customName"><input aria-label="Base URL" placeholder="Base URL, e.g. https://api.mistral.ai/v1" value="${esc(r.base||"")}" data-f="base"><input aria-label="Custom key" type="password" placeholder="API key (kept for this session only)" value="${esc(r.key||"")}" data-f="key" style="grid-column:1 / 3"></div>` : ""}
+      <span class="hint" data-hint></span>`;
+    const [provSel] = el.querySelectorAll("select");
+    provSel.onchange = () => { r.provider = provSel.value; r.model = PROVIDERS[r.provider].def; saveRows(); renderModels(); };
+    const modelIn = el.querySelector(`input[list]`);
+    modelIn.oninput = () => { r.model = modelIn.value.trim(); saveRows(); };
+    const keyIn = el.querySelector('input[aria-label^="Key"]');
+    if (keyIn) keyIn.onchange = () => { setSecret(P.key, keyIn.value.trim()); renderModels(); };
+    el.querySelectorAll("[data-f]").forEach(inp => inp.oninput = () => { r[inp.dataset.f] = inp.value.trim(); if (inp.dataset.f !== "key") saveRows(); });
+    el.querySelector("[data-del]").onclick = () => { rows.splice(i,1); saveRows(); renderModels(); };
+    el.querySelector("[data-load]").onclick = async () => {
+      const hint = el.querySelector("[data-hint]"); hint.textContent = "Loading models…";
+      try {
+        const ids = await listModels(r);
+        el.querySelector("datalist").innerHTML = ids.map(id => `<option value="${esc(id)}">`).join("");
+        hint.textContent = `${ids.length} models loaded${r.provider==="openrouter" ? " · free ones end in :free and are listed first" : ""}. Click the model box to pick.`;
+        modelIn.focus();
+      } catch (e) { hint.textContent = "Couldn't load the list: " + e.message; }
+    };
+    box.appendChild(el);
+  });
+}
+$("#addModel").onclick = () => { rows.push({ id:Math.random().toString(36).slice(2,9), provider:"groq", model:"" }); saveRows(); renderModels(); };
+
+/* ---------- Running ---------- */
+let results = {};      // id -> result
+let log = [];          // evidence entries
+let runMeta = null;
+
+function buildRequest(r){
+  const sys = $("#sys").value, user = $("#user").value;
+  const temperature = Number($("#temp").value), maxTok = Number($("#maxTok").value);
+  const P = PROVIDERS[r.provider], base = baseOf(r), key = keyOf(r), kn = keyName(r);
+  if (P.kind === "gemini") {
+    const body = { contents:[{ role:"user", parts:[{ text:user }] }], generationConfig:{ temperature, maxOutputTokens:maxTok } };
+    if (sys.trim()) body.systemInstruction = { parts:[{ text:sys }] };
+    return { url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`, method:"POST",
+      headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, shownHeaders:{ "Content-Type":"application/json", "x-goog-api-key":`<${kn}>` }, body };
+  }
+  const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys }); messages.push({ role:"user", content:user });
+  return { url:`${base}/chat/completions`, method:"POST",
+    headers:{ "Content-Type":"application/json", Authorization:"Bearer "+key }, shownHeaders:{ "Content-Type":"application/json", Authorization:`Bearer <${kn}>` },
+    body:{ model:r.model, messages, temperature, max_tokens:maxTok } };
+}
+
+function extract(r, j){
+  const P = PROVIDERS[r.provider];
+  if (P.kind === "gemini") {
+    const c = (j.candidates||[])[0] || {}, u = j.usageMetadata || {};
+    return { text:(c.content?.parts||[]).map(p => p.text||"").join(""), finish:c.finishReason||"", id:j.responseId||"", modelReturned:j.modelVersion||"",
+      tokIn:u.promptTokenCount, tokOut:u.candidatesTokenCount, tokTotal:u.totalTokenCount };
+  }
+  const c = (j.choices||[])[0] || {}, u = j.usage || {};
+  return { text:c.message?.content ?? c.text ?? "", finish:c.finish_reason||"", id:j.id||"", modelReturned:j.model||"",
+    tokIn:u.prompt_tokens, tokOut:u.completion_tokens, tokTotal:u.total_tokens };
+}
+
+async function runOne(r, idx){
+  const req = buildRequest(r);
+  const res = { idx, label:label(r), provider:r.provider, model:r.model, state:"running", req, tab:"answer" };
+  results[r.id] = res; renderResults();
+  if (!r.model) { Object.assign(res, { state:"error", error:"No model chosen", status:"–", ms:0 }); renderResults(); return; }
+  if (!keyOf(r)) { Object.assign(res, { state:"error", error:"No API key for this provider", status:"–", ms:0 }); renderResults(); return; }
+  const t0 = new Date(), p0 = performance.now();
+  res.sentAt = t0; addLog(idx, res.label, "REQUEST", `${req.method} ${req.url}`, t0);
+  try {
+    const http = await fetch(req.url, { method:req.method, headers:req.headers, body:JSON.stringify(req.body) });
+    const raw = await http.text(); const p1 = performance.now(), t1 = new Date();
+    let json = null; try { json = JSON.parse(raw); } catch (e) {}
+    Object.assign(res, { status:http.status, ms:Math.round(p1-p0), gotAt:t1, raw, json });
+    if (http.ok && json) {
+      Object.assign(res, extract(r, json)); res.state = "ok";
+      res.words = (res.text.trim().match(/\S+/g)||[]).length; res.chars = res.text.length;
+    } else {
+      res.state = "error"; res.error = (json && (json.error?.message || json.message || JSON.stringify(json.error||json))) || raw.slice(0,300) || ("HTTP " + http.status);
+    }
+    addLog(idx, res.label, "RESPONSE", `${http.status} · ${res.ms} ms${res.state==="error" ? " · " + res.error : ""}`, t1);
+  } catch (e) {
+    const t1 = new Date();
+    Object.assign(res, { state:"error", status:"network", ms:Math.round(performance.now()-p0), gotAt:t1, error:"Network or CORS error: " + e.message });
+    addLog(idx, res.label, "ERROR", res.error, t1);
+  }
+  renderResults();
+}
+
+async function runAll(){
+  if (!$("#user").value.trim()) { toast("Write a user prompt first"); $("#user").focus(); return; }
+  if (!rows.length) { toast("Add at least one model"); return; }
+  results = {};
+  runMeta = { at:new Date(), sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
+  addLog(0, "—", "RUN", `Run started · ${rows.length} model(s) · temperature ${runMeta.temp} · max ${runMeta.maxTok} tokens`, runMeta.at);
+  $("#runAll").disabled = true;
+  await Promise.all(rows.map((r,i) => runOne(r, i+1)));
+  $("#runAll").disabled = false; toast("All models finished");
+}
+$("#runAll").onclick = runAll; $("#rerunAll").onclick = runAll;
+
+/* ---------- Results ---------- */
+let view = "cards";
+$("#vCards").onclick = () => { view="cards"; renderResults(); };
+$("#vTable").onclick = () => { view="table"; renderResults(); };
+
+const ordered = () => rows.map(r => results[r.id] && { r, res:results[r.id] }).filter(Boolean);
+
+function renderSummary(){
+  const all = ordered().map(x => x.res);
+  if (!all.length) { $("#summary").textContent = "Run the models to see results here."; return; }
+  const ok = all.filter(x => x.state==="ok"), bad = all.filter(x => x.state==="error"), run = all.filter(x => x.state==="running");
+  const fastest = ok.slice().sort((a,b) => a.ms-b.ms)[0], longest = ok.slice().sort((a,b) => b.words-a.words)[0], shortest = ok.slice().sort((a,b) => a.words-b.words)[0];
+  $("#summary").innerHTML = `${all.length} run · <span class="ok">${ok.length} ok</span> · <span class="bad">${bad.length} failed</span>${run.length?` · <span class="run">${run.length} running</span>`:""}`
+    + (fastest ? ` · fastest <b>${esc(fastest.label)}</b> ${fastest.ms} ms` : "")
+    + (longest ? ` · longest <b>${esc(longest.label)}</b> ${longest.words} words` : "")
+    + (shortest && ok.length > 1 ? ` · shortest <b>${esc(shortest.label)}</b> ${shortest.words} words` : "");
+}
+
+function pretty(x){ try { return JSON.stringify(typeof x === "string" ? JSON.parse(x) : x, null, 2); } catch (e) { return String(x ?? ""); } }
+
+function cardBody(res){
+  if (res.state === "running") return `<p class="empty">Waiting for the answer…</p>`;
+  if (res.tab === "answer") return res.state === "ok" ? `<div class="answer">${esc(res.text || "(empty answer)")}</div>` : `<p class="bad">${esc(res.error)}</p>`;
+  if (res.tab === "request") return `<pre>${esc(`${res.req.method} ${res.req.url}\nSent: ${res.sentAt ? stamp(res.sentAt) + " " + tz : "not sent"}\n\nHeaders:\n${pretty(res.req.shownHeaders)}\n\nBody:\n${pretty(res.req.body)}`)}</pre>`;
+  if (res.tab === "response") return `<pre>${esc(`Status: ${res.status}\nReceived: ${res.gotAt ? stamp(res.gotAt) + " " + tz : "–"}\nTime: ${res.ms} ms\n\n${res.raw ? pretty(res.raw) : res.error || ""}`)}</pre>`;
+  const kv = [["Provider", res.label.split(" · ")[0]], ["Model asked", res.model], ["Model returned", res.modelReturned], ["Response id", res.id], ["Finish reason", res.finish],
+    ["Tokens in", res.tokIn], ["Tokens out", res.tokOut], ["Tokens total", res.tokTotal], ["Time", res.ms != null ? res.ms + " ms" : ""], ["Words", res.words], ["Characters", res.chars],
+    ["Sent", res.sentAt ? stamp(res.sentAt) : ""], ["Received", res.gotAt ? stamp(res.gotAt) : ""], ["HTTP status", res.status]];
+  return `<div class="kv">${kv.map(([k,v]) => `<span>${k}</span><span>${esc(v ?? "–") || "–"}</span>`).join("")}</div>`;
+}
+
+function renderResults(){
+  renderSummary();
+  const list = ordered();
+  $("#vCards").setAttribute("aria-pressed", view==="cards"); $("#vTable").setAttribute("aria-pressed", view==="table");
+  $("#cards").hidden = view !== "cards"; $("#table").hidden = view !== "table";
+  if (view === "table") {
+    $("#table").innerHTML = list.length ? `<table><thead><tr><th>#</th><th>Provider · model</th><th>Status</th><th>Time</th><th>In</th><th>Out</th><th>Total</th><th>Words</th><th>Finish</th></tr></thead><tbody>${
+      list.map(({res}) => `<tr><td>${res.idx}</td><td>${esc(res.label)}</td><td class="${res.state==="ok"?"ok":res.state==="error"?"bad":"run"}">${esc(res.state==="running"?"running":res.status)}</td><td class="num">${res.ms!=null?res.ms+" ms":"–"}</td><td class="num">${res.tokIn??"–"}</td><td class="num">${res.tokOut??"–"}</td><td class="num">${res.tokTotal??"–"}</td><td class="num">${res.words??"–"}</td><td>${esc(res.finish || (res.state==="error"?"error":"–"))}</td></tr>`).join("")
+    }</tbody></table>` : `<p class="empty">No results yet.</p>`;
+    return;
+  }
+  const box = $("#cards"); box.innerHTML = "";
+  if (!list.length) { box.innerHTML = `<p class="empty">No results yet.</p>`; return; }
+  list.forEach(({r, res}) => {
+    const el = document.createElement("article"); el.className = "card";
+    const statusTxt = res.state==="running" ? `<span class="run">● running</span>` : res.state==="ok" ? `<span class="ok">✓ ${res.status}</span> · ${res.ms} ms` : `<span class="bad">✗ ${esc(res.status)}</span> · ${res.ms} ms`;
+    el.innerHTML = `
+      <div class="head"><span class="title">${res.idx}. ${esc(res.label)}</span>
+        <span class="stat">${statusTxt}</span>
+        ${res.state==="ok" ? `<span class="stat">in ${res.tokIn??"–"} · out ${res.tokOut??"–"} · ${res.words} words · finish: ${esc(res.finish||"–")}</span>` : ""}</div>
+      <div class="tabs" role="tablist">${["answer","request","response","info"].map(t => `<button type="button" role="tab" aria-selected="${res.tab===t}" data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join("")}</div>
+      <div class="body">${cardBody(res)}</div>
+      <div class="foot">${res.state==="error" ? `<button type="button" class="btn small primary" data-retry>⟲ Retry</button>` : `<button type="button" class="btn small" data-retry ${res.state==="running"?"disabled":""}>⟲ Re-run</button>`}<button type="button" class="btn small" data-copy ${res.state==="running"?"disabled":""}>Copy</button></div>`;
+    el.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { res.tab = b.dataset.t; renderResults(); });
+    el.querySelector("[data-retry]").onclick = () => runOne(r, res.idx);
+    el.querySelector("[data-copy]").onclick = () => copy(mdForResult(res), "Copied this model's evidence");
+    box.appendChild(el);
+  });
+}
+
+/* ---------- Evidence ---------- */
+function addLog(idx, who, type, text, at){ log.push({ idx, who, type, text, at }); renderLog(); }
+function renderLog(){
+  $("#log").innerHTML = log.length ? log.map(e => `<div>${esc(stamp(e.at))} ${esc(tz)} · ${e.idx?esc(e.idx+". "):""}${esc(e.who)} · <b>${esc(e.type)}</b> · ${esc(e.text)}</div>`).join("") : `<span class="empty">Every request and response is recorded here with timestamps.</span>`;
+  $("#log").scrollTop = $("#log").scrollHeight;
+}
+$("#clearLog").onclick = () => { log = []; renderLog(); };
+
+const fence = (lang, s) => "```" + lang + "\n" + s + "\n```";
+function mdForResult(res){
+  const lines = [`### ${res.idx}. ${res.label}`, "",
+    `| Field | Value |`, `|---|---|`,
+    ...[["Status", res.status], ["Time", res.ms!=null?res.ms+" ms":"–"], ["Sent", res.sentAt?stamp(res.sentAt)+" "+tz:"–"], ["Received", res.gotAt?stamp(res.gotAt)+" "+tz:"–"],
+       ["Model asked", res.model], ["Model returned", res.modelReturned||"–"], ["Response id", res.id||"–"], ["Finish reason", res.finish||"–"],
+       ["Tokens in / out / total", `${res.tokIn??"–"} / ${res.tokOut??"–"} / ${res.tokTotal??"–"}`], ["Words / characters", `${res.words??"–"} / ${res.chars??"–"}`]].map(([k,v]) => `| ${k} | ${String(v??"–").replace(/\|/g,"\\|")} |`),
+    "", "**Answer**", "", res.state==="ok" ? fence("text", res.text) : `Error: ${res.error}`,
+    "", "**Request**", "", fence("http", `${res.req.method} ${res.req.url}\n${Object.entries(res.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(res.req.body)}`),
+    "", "**Response**", "", fence("json", res.raw ? pretty(res.raw) : (res.error||"")), ""];
+  return lines.join("\n");
+}
+function fullMd(){
+  const list = ordered().map(x => x.res);
+  const m = runMeta || { at:new Date(), sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
+  return [`# Model comparison: evidence`, "",
+    `- Generated: ${stamp(new Date())} ${tz}`, `- Run started: ${stamp(m.at)} ${tz}`, `- Tool: API Bench · Compare models`, `- Temperature: ${m.temp} · Max length: ${m.maxTok} tokens`, `- API keys are replaced with placeholders such as \`<groq_key>\`.`, "",
+    "## Prompt", "", "**System / role**", "", fence("text", m.sys || "(none)"), "", "**User**", "", fence("text", m.user), "",
+    "## Comparison", "", "| # | Provider · model | Status | Time (ms) | Tokens in | Tokens out | Words | Finish |", "|---|---|---|---|---|---|---|---|",
+    ...list.map(r => `| ${r.idx} | ${r.label} | ${r.status??r.state} | ${r.ms??"–"} | ${r.tokIn??"–"} | ${r.tokOut??"–"} | ${r.words??"–"} | ${r.finish || (r.state==="error"?"error":"–")} |`), "",
+    "## Responses", "", ...list.map(mdForResult), "## Timeline", "", ...log.map(e => `- ${stamp(e.at)} ${tz} · ${e.idx?e.idx+". ":""}${e.who} · ${e.type} · ${e.text}`), ""].join("\n");
+}
+async function copy(text, msg){ try { await navigator.clipboard.writeText(text); toast(msg); } catch (e) { const t=document.createElement("textarea"); t.value=text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); toast(msg); } }
+$("#copyMd").onclick = () => { if (!Object.keys(results).length) return toast("Run the models first"); copy(fullMd(), "Copied all evidence as Markdown"); };
+$("#dlMd").onclick = () => {
+  if (!Object.keys(results).length) return toast("Run the models first");
+  const blob = new Blob([fullMd()], { type:"text/markdown" }), a = document.createElement("a");
+  const d = new Date(); a.href = URL.createObjectURL(blob); a.download = `model-comparison_${stamp(d).slice(0,19).replace(/[ :]/g,"-")}.md`; a.click(); URL.revokeObjectURL(a.href);
+};
+
+renderModels(); renderResults();
+</script>
+</body>
+</html>
