@@ -154,6 +154,13 @@ const PROVIDERS = {
   groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"" },
   openrouter: { name:"OpenRouter", key:"openrouter_key", keyLink:"https://openrouter.ai/keys", kind:"openai", base:"https://openrouter.ai/api/v1", def:"", listNoKey:true },
   hf:         { name:"Hugging Face", key:"hf_token", keyLink:"https://huggingface.co/settings/tokens", kind:"openai", base:"https://router.huggingface.co/v1", def:"", listNoKey:true },
+  mistral:    { name:"Mistral", key:"mistral_key", keyLink:"https://console.mistral.ai/api-keys", kind:"openai", base:"https://api.mistral.ai/v1", def:"mistral-small-latest" },
+  cohere:     { name:"Cohere", key:"cohere_key", keyLink:"https://dashboard.cohere.com/api-keys", kind:"openai", base:"https://api.cohere.ai/compatibility/v1", def:"command-a-03-2025", listUrl:"https://api.cohere.com/v1/models?endpoint=chat" },
+  deepseek:   { name:"DeepSeek", key:"deepseek_key", keyLink:"https://platform.deepseek.com/api_keys", kind:"openai", base:"https://api.deepseek.com", def:"deepseek-chat", paid:true },
+  together:   { name:"Together AI", key:"together_key", keyLink:"https://api.together.ai/settings/api-keys", kind:"openai", base:"https://api.together.xyz/v1", def:"", paid:true },
+  fireworks:  { name:"Fireworks AI", key:"fireworks_key", keyLink:"https://fireworks.ai/account/api-keys", kind:"openai", base:"https://api.fireworks.ai/inference/v1", def:"", paid:true },
+  openai:     { name:"OpenAI", key:"openai_key", keyLink:"https://platform.openai.com/api-keys", kind:"openai", base:"https://api.openai.com/v1", def:"", paid:true, maxKey:"max_completion_tokens" },
+  anthropic:  { name:"Anthropic (Claude)", key:"anthropic_key", keyLink:"https://console.anthropic.com/settings/keys", kind:"anthropic", base:"https://api.anthropic.com/v1", def:"claude-haiku-5-5", paid:true },
   custom:     { name:"Custom (OpenAI-compatible)", key:null, kind:"openai", base:"", def:"" }
 };
 const secret = k => store.get("apibench.secret."+k, "");
@@ -172,14 +179,17 @@ async function listModels(r){
     const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || res.status);
     ids = (j.models||[]).filter(m => (m.supportedGenerationMethods||[]).includes("generateContent")).map(m => m.name.replace(/^models\//,""));
   } else {
-    const res = await fetch(base + "/models", { headers: key ? { Authorization:"Bearer "+key } : {} });
-    const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || res.status);
-    ids = (j.data||[]).map(m => m.id).filter(Boolean);
+    const headers = P.kind === "anthropic" ? anthHeaders(key) : (key ? { Authorization:"Bearer "+key } : {});
+    const res = await fetch(P.listUrl || (base + "/models" + (P.kind === "anthropic" ? "?limit=100" : "")), { headers });
+    const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || j.message || res.status);
+    const arr = Array.isArray(j) ? j : (j.data || j.models || []);
+    ids = arr.map(m => m.id || m.name).filter(Boolean);
     if (r.provider === "groq") ids = ids.filter(id => !/whisper|tts|guard|playai/i.test(id));
   }
   ids.sort((a,b) => (b.endsWith(":free") - a.endsWith(":free")) || a.localeCompare(b));
   return (modelCache[cacheKey] = ids);
 }
+const anthHeaders = key => ({ "x-api-key":key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" });
 const baseOf = r => (r.provider === "custom" ? (r.base||"").replace(/\/+$/,"") : PROVIDERS[r.provider].base);
 const keyOf = r => r.provider === "custom" ? (r.key||"") : secret(PROVIDERS[r.provider].key);
 const keyName = r => r.provider === "custom" ? "custom_key" : PROVIDERS[r.provider].key;
@@ -199,9 +209,9 @@ function renderModels(){
     const el = document.createElement("div"); el.className = "mrow";
     el.innerHTML = `
       <span class="idx">${i+1}</span>
-      <select aria-label="Provider ${i+1}">${Object.entries(PROVIDERS).map(([k,v]) => `<option value="${k}" ${k===r.provider?"selected":""}>${esc(v.name)}</option>`).join("")}</select>
+      <select aria-label="Provider ${i+1}">${[["Free to use", ([k,v]) => !v.paid && k !== "custom"], ["Paid (add credit first)", ([k,v]) => v.paid], ["Other", ([k]) => k === "custom"]].map(([g,f]) => `<optgroup label="${g}">${Object.entries(PROVIDERS).filter(f).map(([k,v]) => `<option value="${k}" ${k===r.provider?"selected":""}>${esc(v.name)}</option>`).join("")}</optgroup>`).join("")}</select>
       <span style="display:flex;gap:6px"><input aria-label="Model ${i+1}" list="dl-${r.id}" value="${esc(r.model||"")}" placeholder="Model id (type, or load list)" style="flex:1"><datalist id="dl-${r.id}"></datalist><button type="button" class="btn small" data-load>Load list</button></span>
-      <span>${r.provider==="custom" ? "" : `<input aria-label="Key ${i+1}" type="password" value="${esc(secret(P.key))}" placeholder="API key" style="width:100%"><span class="${hasKey?"keyok":"keybad"}" style="font-size:12px">${hasKey?"✓ key saved in this browser":`✗ no key · <a href="${P.keyLink}" target="_blank" rel="noopener">get one</a>`}</span>`}</span>
+      <span>${r.provider==="custom" ? "" : `<input aria-label="Key ${i+1}" type="password" value="${esc(secret(P.key))}" placeholder="API key" style="width:100%"><span class="${hasKey?"keyok":"keybad"}" style="font-size:12px">${hasKey?"✓ key saved in this browser":`✗ no key · <a href="${P.keyLink}" target="_blank" rel="noopener">get one</a>`}${P.paid?" · paid: add credit to your account first":""}</span>`}</span>
       <button type="button" class="btn small" aria-label="Remove model ${i+1}" data-del>✕</button>
       ${r.provider==="custom" ? `<div class="custom"><input aria-label="Name" placeholder="Name, e.g. Mistral" value="${esc(r.customName||"")}" data-f="customName"><input aria-label="Base URL" placeholder="Base URL, e.g. https://api.mistral.ai/v1" value="${esc(r.base||"")}" data-f="base"><input aria-label="Custom key" type="password" placeholder="API key (kept for this session only)" value="${esc(r.key||"")}" data-f="key" style="grid-column:1 / 3"></div>` : ""}
       <span class="hint" data-hint></span>`;
@@ -267,10 +277,17 @@ function buildRequest(r){
     return { ...meta, url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`, method:"POST",
       headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, shownHeaders:{ "Content-Type":"application/json", "x-goog-api-key":`<${kn}>` }, body };
   }
+  if (P.kind === "anthropic") {
+    const body = { model:r.model, max_tokens:maxTok, temperature:Math.min(temperature, 1), messages:[{ role:"user", content:user }] };
+    if (sys.trim()) body.system = sys;
+    const h = anthHeaders(key);
+    return { ...meta, url:`${base}/messages`, method:"POST", headers:{ "Content-Type":"application/json", ...h },
+      shownHeaders:{ "Content-Type":"application/json", ...h, "x-api-key":`<${kn}>` }, body };
+  }
   const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys }); messages.push({ role:"user", content:user });
   return { ...meta, url:`${base}/chat/completions`, method:"POST",
     headers:{ "Content-Type":"application/json", Authorization:"Bearer "+key }, shownHeaders:{ "Content-Type":"application/json", Authorization:`Bearer <${kn}>` },
-    body:{ model:r.model, messages, temperature, max_tokens:maxTok } };
+    body:{ model:r.model, messages, temperature, [P.maxKey || "max_tokens"]:maxTok } };
 }
 
 function extract(r, j){
@@ -279,6 +296,11 @@ function extract(r, j){
     const c = (j.candidates||[])[0] || {}, u = j.usageMetadata || {};
     return { text:(c.content?.parts||[]).map(p => p.text||"").join(""), finish:c.finishReason||"", id:j.responseId||"", modelReturned:j.modelVersion||"",
       tokIn:u.promptTokenCount, tokOut:u.candidatesTokenCount, tokTotal:u.totalTokenCount };
+  }
+  if (P.kind === "anthropic") {
+    const u = j.usage || {};
+    return { text:(j.content||[]).filter(b => b.type === "text").map(b => b.text).join(""), finish:j.stop_reason||"", id:j.id||"", modelReturned:j.model||"",
+      tokIn:u.input_tokens, tokOut:u.output_tokens, tokTotal:(u.input_tokens||0) + (u.output_tokens||0) };
   }
   const c = (j.choices||[])[0] || {}, u = j.usage || {};
   return { text:c.message?.content ?? c.text ?? "", finish:c.finish_reason||"", id:j.id||"", modelReturned:j.model||"",

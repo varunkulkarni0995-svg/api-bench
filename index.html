@@ -338,17 +338,17 @@ const BUILTIN=[
   PROMPT,TEMP]},
  {id:"gemini-models",group:"Gen AI",name:"Gemini: list models",method:"GET",url:"https://generativelanguage.googleapis.com/v1beta/models",desc:"Lists the model names your key can use.",headers:[{k:"x-goog-api-key",v:"{gemini_key}",on:true}],params:[
   {k:"gemini_key",in:"header",label:"Gemini API key",type:"secret",v:"",link:"https://aistudio.google.com/apikey",hint:"Saved only in this browser."},{k:"pageSize",type:"hidden",v:"100"}]},
- {id:"groq",group:"Gen AI",name:"Groq: chat",method:"POST",url:"https://api.groq.com/openai/v1/chat/completions",desc:"Groq: very fast open models (Llama, GPT-OSS, Qwen). Free tier, rate-limited per model. OpenAI-compatible format.",
+ {id:"groq",group:"Gen AI",name:"Groq: chat",method:"POST",url:"https://api.groq.com/openai/v1/chat/completions",desc:"Groq: very fast open models (GPT-OSS, Qwen). Free tier, rate-limited per model. OpenAI-compatible format.",
   headers:[CT],auth:{type:"bearer",value:"{groq_key}"},body:chatBody,params:[
   {k:"groq_key",in:"header",label:"Groq API key",type:"secret",v:"",link:"https://console.groq.com/keys",hint:"Free, no card. Saved only in this browser."},
-  {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-20b",options:["openai/gpt-oss-20b","openai/gpt-oss-120b","llama-3.3-70b-versatile","llama-3.1-8b-instant"],hint:"Run 'Groq: list models' for current names."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-20b",options:["openai/gpt-oss-20b","openai/gpt-oss-120b","qwen/qwen3.8-27b","groq/compound"],hint:"Run 'Groq: list models' for current names."},
   SYS,PROMPT,TEMP]},
  {id:"groq-models",group:"Gen AI",name:"Groq: list models",method:"GET",url:"https://api.groq.com/openai/v1/models",desc:"Lists Groq's current model ids.",auth:{type:"bearer",value:"{groq_key}"},params:[
   {k:"groq_key",in:"header",label:"Groq API key",type:"secret",v:"",link:"https://console.groq.com/keys",hint:"Saved only in this browser."}]},
  {id:"openrouter",group:"Gen AI",name:"OpenRouter: chat",method:"POST",url:"https://openrouter.ai/api/v1/chat/completions",desc:"OpenRouter: one API for many providers. Models ending in :free cost nothing (about 20 requests/min, 50/day).",
   headers:[CT],auth:{type:"bearer",value:"{openrouter_key}"},body:chatBody,params:[
   {k:"openrouter_key",in:"header",label:"OpenRouter API key",type:"secret",v:"",link:"https://openrouter.ai/keys",hint:"Free, no card. Saved only in this browser."},
-  {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-120b:free",options:["openai/gpt-oss-120b:free","meta-llama/llama-3.3-70b-instruct:free","qwen/qwen3-coder:free"],hint:"Pick any model ending in :free from 'OpenRouter: list models'."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"openrouter/free",options:["openrouter/free","google/gemma-4-31b-it:free","nvidia/nemotron-3.5-lightning:free","thinkingmachines/inkling-small:free"],hint:"Pick any model ending in :free from 'OpenRouter: list models'."},
   SYS,PROMPT,TEMP]},
  {id:"openrouter-models",group:"Gen AI",name:"OpenRouter: list models",method:"GET",url:"https://openrouter.ai/api/v1/models",desc:"All models on OpenRouter. No key needed. Free ones end in :free.",params:[]},
  {id:"hf",group:"Gen AI",name:"Hugging Face: chat",method:"POST",url:"https://router.huggingface.co/v1/chat/completions",desc:"Hugging Face Inference Providers: open models, small monthly free credit. OpenAI-compatible format.",
@@ -357,6 +357,36 @@ const BUILTIN=[
   {k:"model",in:"body",label:"Model",type:"combo",v:"openai/gpt-oss-20b",options:["openai/gpt-oss-20b","meta-llama/Llama-3.1-8B-Instruct","Qwen/Qwen2.5-7B-Instruct"],hint:"Run 'Hugging Face: list models' for current names."},
   SYS,PROMPT,TEMP]},
  {id:"hf-models",group:"Gen AI",name:"Hugging Face: list models",method:"GET",url:"https://router.huggingface.co/v1/models",desc:"Models available through Inference Providers.",params:[]},
+ {id:"mistral",group:"Gen AI",name:"Mistral: chat",method:"POST",url:"https://api.mistral.ai/v1/chat/completions",desc:"Mistral (France). Free 'Experiment' plan, no card. OpenAI-compatible format.",
+  headers:[CT],auth:{type:"bearer",value:"{mistral_key}"},body:chatBody,params:[
+  {k:"mistral_key",in:"header",label:"Mistral API key",type:"secret",v:"",link:"https://console.mistral.ai/api-keys",hint:"Free plan, no card. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"mistral-small-latest",options:["mistral-small-latest","mistral-medium-latest","mistral-large-latest","codestral-latest"],hint:"Run 'Mistral: list models' for current names."},
+  SYS,PROMPT,TEMP]},
+ {id:"mistral-models",group:"Gen AI",name:"Mistral: list models",method:"GET",url:"https://api.mistral.ai/v1/models",desc:"Lists Mistral's model ids.",auth:{type:"bearer",value:"{mistral_key}"},params:[
+  {k:"mistral_key",in:"header",label:"Mistral API key",type:"secret",v:"",link:"https://console.mistral.ai/api-keys",hint:"Saved only in this browser."}]},
+ {id:"cohere",group:"Gen AI",name:"Cohere: chat",method:"POST",url:"https://api.cohere.ai/compatibility/v1/chat/completions",desc:"Cohere (Canada). Free trial key: about 1,000 calls/month, not for production. OpenAI-compatible format.",
+  headers:[CT],auth:{type:"bearer",value:"{cohere_key}"},body:chatBody,params:[
+  {k:"cohere_key",in:"header",label:"Cohere API key",type:"secret",v:"",link:"https://dashboard.cohere.com/api-keys",hint:"Free trial key. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"command-a-03-2025",options:["command-a-03-2025","command-r7b-12-2024"],hint:"If a model errors, check Cohere's model list in your dashboard."},
+  SYS,PROMPT,TEMP]},
+ {id:"deepseek",group:"Gen AI",name:"DeepSeek: chat (paid, cheap)",method:"POST",url:"https://api.deepseek.com/chat/completions",desc:"DeepSeek (China). Paid but very cheap; half price off-peak. Add credit first. OpenAI-compatible format.",
+  headers:[CT],auth:{type:"bearer",value:"{deepseek_key}"},body:chatBody,params:[
+  {k:"deepseek_key",in:"header",label:"DeepSeek API key",type:"secret",v:"",link:"https://platform.deepseek.com/api_keys",hint:"Paid. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"deepseek-chat",options:["deepseek-chat","deepseek-reasoner","deepseek-flash"],hint:"If a model errors, list models at https://api.deepseek.com/models."},
+  SYS,PROMPT,TEMP]},
+ {id:"openai",group:"Gen AI",name:"OpenAI: chat (paid)",method:"POST",url:"https://api.openai.com/v1/chat/completions",desc:"OpenAI GPT models. Paid, add credit first.",
+  headers:[CT],auth:{type:"bearer",value:"{openai_key}"},body:chatBody,params:[
+  {k:"openai_key",in:"header",label:"OpenAI API key",type:"secret",v:"",link:"https://platform.openai.com/api-keys",hint:"Paid. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"gpt-6-luna",options:["gpt-6-luna","gpt-6-sol","gpt-6.1-sol"],hint:"Run 'OpenAI: list models' for exact current names."},
+  SYS,PROMPT,TEMP]},
+ {id:"openai-models",group:"Gen AI",name:"OpenAI: list models",method:"GET",url:"https://api.openai.com/v1/models",desc:"Lists the OpenAI model ids your key can use.",auth:{type:"bearer",value:"{openai_key}"},params:[
+  {k:"openai_key",in:"header",label:"OpenAI API key",type:"secret",v:"",link:"https://platform.openai.com/api-keys",hint:"Saved only in this browser."}]},
+ {id:"anthropic",group:"Gen AI",name:"Anthropic Claude: message (paid)",method:"POST",url:"https://api.anthropic.com/v1/messages",desc:"Anthropic Claude. Paid, add credit first. Its own format (not OpenAI-style); temperature max 1.",
+  headers:[CT,{k:"x-api-key",v:"{anthropic_key}",on:true},{k:"anthropic-version",v:"2023-06-01",on:true},{k:"anthropic-dangerous-direct-browser-access",v:"true",on:true}],
+  body:'{\n  "model": "{model}",\n  "max_tokens": 512,\n  "system": "{system}",\n  "messages": [{ "role": "user", "content": "{prompt}" }],\n  "temperature": {temperature}\n}',params:[
+  {k:"anthropic_key",in:"header",label:"Anthropic API key",type:"secret",v:"",link:"https://console.anthropic.com/settings/keys",hint:"Paid. Saved only in this browser."},
+  {k:"model",in:"body",label:"Model",type:"combo",v:"claude-haiku-5-5",options:["claude-haiku-5-5","claude-sonnet-5-5","claude-opus-5-5"]},
+  SYS,PROMPT,{...TEMP,options:[["0","0 · focused"],["0.7","0.7 · balanced"],["1","1 · creative"]]}]},
  {id:"forecast",group:"Weather",name:"Hourly forecast",method:"GET",url:"https://api.open-meteo.com/v1/forecast",desc:"Open-Meteo. Hourly weather for any location. No key.",params:[
   {k:"latitude",label:"Latitude",type:"number",v:"40.71",hint:"NYC ≈ 40.71"},
   {k:"longitude",label:"Longitude",type:"number",v:"-74.01",hint:"NYC ≈ -74.01"},
