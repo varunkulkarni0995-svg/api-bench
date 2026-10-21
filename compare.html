@@ -62,10 +62,18 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 th{color:var(--muted);font-weight:600}
 td.num{font-family:var(--font-mono)}
-.log{font:12px/1.6 var(--font-mono);max-height:320px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
+.log{font:12px/1.6 var(--font-mono);max-height:560px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
 .empty{color:var(--muted);font-size:14px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
+.log details{border-bottom:1px solid var(--line);padding:4px 0}
+.log summary{cursor:pointer}
+.log details pre{margin:6px 0 8px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.log .lrun{padding:4px 0;border-bottom:1px solid var(--line)}
+.etype{font-size:12px;font-weight:600}
+.attempts{font-size:12px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:10px;padding:16px;width:min(760px,92vw)}
+dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing:border-box}
 @media (max-width:760px){.wrap{padding:12px}.mrow{grid-template-columns:24px minmax(0,1fr) 36px}.mrow>*{min-width:0}.mrow [data-del]{grid-row:1;grid-column:3}.mrow>*:nth-child(3),.mrow>*:nth-child(4),.mrow .custom,.mrow .hint{grid-column:2 / 4}.card{flex-basis:300px}}
 </style>
 </head>
@@ -73,7 +81,7 @@ td.num{font-family:var(--font-mono)}
 <div class="wrap">
 <header>
   <div><a href="./">← API Bench</a><h1>Compare models</h1></div>
-  <span class="empty">Same prompt to several Gen AI models. Keys stay in this browser and are shared with API Bench.</span>
+  <span class="empty">Same prompt to several Gen AI models. Keys are saved only in this browser and go straight to each provider (no server in between). Copies and exports show placeholders such as &lt;groq_key&gt;, never the key.</span>
 </header>
 
 <section class="panel" aria-labelledby="p1">
@@ -83,6 +91,7 @@ td.num{font-family:var(--font-mono)}
   <div class="row">
     <label>Temperature<input id="temp" type="number" min="0" max="2" step="0.1" value="0.7" style="width:110px"></label>
     <label>Max length (tokens)<input id="maxTok" type="number" min="1" step="1" value="512" style="width:150px"></label>
+    <label>Trials per model<input id="trials" type="number" min="1" max="10" step="1" value="1" style="width:120px"></label>
   </div>
 </section>
 
@@ -100,6 +109,7 @@ td.num{font-family:var(--font-mono)}
     <h2 id="p3"><span class="n">3</span>Results</h2>
     <div class="row">
       <div class="seg" role="group" aria-label="View"><button type="button" id="vCards" aria-pressed="true">Cards</button><button type="button" id="vTable" aria-pressed="false">Table</button></div>
+      <button type="button" class="btn small" id="copyAnswers">Copy all answers</button>
       <button type="button" class="btn small" id="rerunAll">⟲ Run again</button>
     </div>
   </div>
@@ -112,15 +122,22 @@ td.num{font-family:var(--font-mono)}
   <div class="toolbar">
     <h2 id="p4"><span class="n">4</span>Evidence log</h2>
     <div class="row">
-      <button type="button" class="btn small" id="copyMd">Copy as Markdown</button>
+      <button type="button" class="btn small" id="copyMd">Copy all evidence</button>
       <button type="button" class="btn small" id="dlMd">Download .md</button>
+      <button type="button" class="btn small" id="dlJson">Download .json</button>
       <button type="button" class="btn small" id="clearLog">Clear</button>
     </div>
   </div>
   <div class="log" id="log"><span class="empty">Every request and response is recorded here with timestamps.</span></div>
+  <p class="empty" style="margin:8px 0 0">Click a line to see the full request and response.</p>
 </section>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<dialog id="copyBox" aria-labelledby="cbT">
+  <p id="cbT" style="margin:0 0 8px"><b>Copy didn't work automatically.</b> The text is selected below: press Ctrl+C (Cmd+C on Mac).</p>
+  <textarea id="cbText" readonly></textarea>
+  <div class="row" style="margin-top:8px"><button type="button" class="btn small" id="cbSel">Select all</button><button type="button" class="btn small primary" id="cbClose">Close</button></div>
+</dialog>
 
 <script>
 "use strict";
@@ -211,22 +228,47 @@ function renderModels(){
 $("#addModel").onclick = () => { rows.push({ id:Math.random().toString(36).slice(2,9), provider:"groq", model:"" }); saveRows(); renderModels(); };
 
 /* ---------- Running ---------- */
-let results = {};      // id -> result
-let log = [];          // evidence entries
+let results = {};      // row id -> latest attempt
+let log = [];          // evidence: {type:"RUN",at,text} or {type:"CALL",res}
 let runMeta = null;
+let attemptCount = {};
+const newRunId = d => "run-" + stamp(d).slice(0,19).replace(/[-: ]/g,"").replace(/^(\d{8})/,"$1-");
+
+/* never let a key leak into copies or exports */
+function allKeys(){
+  const out = [];
+  Object.values(PROVIDERS).forEach(P => { if (P.key) { const v = secret(P.key); if (v && v.length > 5) out.push([v, `<${P.key}>`]); } });
+  rows.forEach(r => { if (r.provider === "custom" && r.key && r.key.length > 5) out.push([r.key, "<custom_key>"]); });
+  return out;
+}
+const mask = s => { let t = String(s ?? ""); allKeys().forEach(([v,n]) => { t = t.split(v).join(n); }); return t; };
+
+function errType(status, msg){
+  const m = String(msg||"").toLowerCase();
+  if (status === "network") return "Network / CORS (provider blocked the browser call or no internet)";
+  if (status === "–") return "Setup (fix before running)";
+  if (status === 401 || status === 403) return "Auth: key wrong or no access to this model";
+  if (status === 429) return "Rate limit: too many calls, wait and retry";
+  if (status === 402 || /insufficient|credit|billing|payment required/.test(m)) return "No credits / billing";
+  if (status === 404) return /endpoint|support/.test(m) ? "Endpoint not supported for this model (config error, not a model failure)" : "Model not found (check the model id)";
+  if (status === 400) return /model/.test(m) ? "Model / settings mismatch (config error)" : "Bad request (check settings)";
+  if (status >= 500) return "Provider error (their side, retry later)";
+  return "HTTP " + status;
+}
 
 function buildRequest(r){
   const sys = $("#sys").value, user = $("#user").value;
   const temperature = Number($("#temp").value), maxTok = Number($("#maxTok").value);
   const P = PROVIDERS[r.provider], base = baseOf(r), key = keyOf(r), kn = keyName(r);
+  const meta = { prompt:{ system:sys, user }, settings:{ temperature, max_tokens:maxTok } };
   if (P.kind === "gemini") {
     const body = { contents:[{ role:"user", parts:[{ text:user }] }], generationConfig:{ temperature, maxOutputTokens:maxTok } };
     if (sys.trim()) body.systemInstruction = { parts:[{ text:sys }] };
-    return { url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`, method:"POST",
+    return { ...meta, url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`, method:"POST",
       headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, shownHeaders:{ "Content-Type":"application/json", "x-goog-api-key":`<${kn}>` }, body };
   }
   const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys }); messages.push({ role:"user", content:user });
-  return { url:`${base}/chat/completions`, method:"POST",
+  return { ...meta, url:`${base}/chat/completions`, method:"POST",
     headers:{ "Content-Type":"application/json", Authorization:"Bearer "+key }, shownHeaders:{ "Content-Type":"application/json", Authorization:`Bearer <${kn}>` },
     body:{ model:r.model, messages, temperature, max_tokens:maxTok } };
 }
@@ -243,17 +285,32 @@ function extract(r, j){
     tokIn:u.prompt_tokens, tokOut:u.completion_tokens, tokTotal:u.total_tokens };
 }
 
-async function runOne(r, idx){
-  const req = buildRequest(r);
-  const res = { idx, label:label(r), provider:r.provider, model:r.model, state:"running", req, tab:"answer" };
-  results[r.id] = res; renderResults();
-  if (!r.model) { Object.assign(res, { state:"error", error:"No model chosen", status:"–", ms:0 }); renderResults(); return; }
-  if (!keyOf(r)) { Object.assign(res, { state:"error", error:"No API key for this provider", status:"–", ms:0 }); renderResults(); return; }
-  const t0 = new Date(), p0 = performance.now();
-  res.sentAt = t0; addLog(idx, res.label, "REQUEST", `${req.method} ${req.url}`, t0);
+/* checks before sending: catch config errors so they don't look like model failures */
+function precheck(r){
+  if (!r.model) return "No model chosen";
+  if (!keyOf(r)) return "No API key for this provider";
+  if (r.provider === "custom" && !/^https?:\/\//.test(baseOf(r))) return "Base URL must start with https://";
+  if (r.provider === "openrouter" && /:batch$/.test(r.model)) return "This is a batch-only model; it can't answer chat requests. Pick another id (free ones end in :free).";
+  return "";
+}
+function listWarning(r){
+  const ids = modelCache[r.provider + "|" + baseOf(r)];
+  return ids && !ids.includes(r.model) ? "Model id isn't in this provider's list; it may fail." : "";
+}
+
+async function runOne(r, idx, trial){
+  if (!runMeta) runMeta = { id:newRunId(new Date()), at:new Date(), trials:1 };
+  const req = buildRequest(r), prev = results[r.id];
+  const attempt = (attemptCount[r.id] = (attemptCount[r.id]||0) + 1);
+  const res = { runId:runMeta.id, rowId:r.id, idx, label:label(r), provider:r.provider, model:r.model, state:"running", req, tab:prev?.tab || "answer",
+    attempt, trial:trial||null, warn:listWarning(r), sentAt:new Date() };
+  results[r.id] = res; log.push({ type:"CALL", res, at:res.sentAt }); renderResults(); renderLog(true);
+  const bad = precheck(r);
+  if (bad) { Object.assign(res, { state:"error", status:"–", ms:0, gotAt:new Date(), error:bad, errType:errType("–") }); renderResults(); renderLog(); return; }
+  const p0 = performance.now();
   try {
     const http = await fetch(req.url, { method:req.method, headers:req.headers, body:JSON.stringify(req.body) });
-    const raw = await http.text(); const p1 = performance.now(), t1 = new Date();
+    const raw = mask(await http.text()); const p1 = performance.now(), t1 = new Date();
     let json = null; try { json = JSON.parse(raw); } catch (e) {}
     Object.assign(res, { status:http.status, ms:Math.round(p1-p0), gotAt:t1, raw, json });
     if (http.ok && json) {
@@ -261,25 +318,25 @@ async function runOne(r, idx){
       res.words = (res.text.trim().match(/\S+/g)||[]).length; res.chars = res.text.length;
     } else {
       res.state = "error"; res.error = (json && (json.error?.message || json.message || JSON.stringify(json.error||json))) || raw.slice(0,300) || ("HTTP " + http.status);
+      res.errType = errType(http.status, res.error);
     }
-    addLog(idx, res.label, "RESPONSE", `${http.status} · ${res.ms} ms${res.state==="error" ? " · " + res.error : ""}`, t1);
   } catch (e) {
-    const t1 = new Date();
-    Object.assign(res, { state:"error", status:"network", ms:Math.round(performance.now()-p0), gotAt:t1, error:"Network or CORS error: " + e.message });
-    addLog(idx, res.label, "ERROR", res.error, t1);
+    Object.assign(res, { state:"error", status:"network", ms:Math.round(performance.now()-p0), gotAt:new Date(), error:mask(e.message), errType:errType("network") });
   }
-  renderResults();
+  renderResults(); renderLog();
 }
 
 async function runAll(){
   if (!$("#user").value.trim()) { toast("Write a user prompt first"); $("#user").focus(); return; }
   if (!rows.length) { toast("Add at least one model"); return; }
-  results = {};
-  runMeta = { at:new Date(), sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
-  addLog(0, "—", "RUN", `Run started · ${rows.length} model(s) · temperature ${runMeta.temp} · max ${runMeta.maxTok} tokens`, runMeta.at);
-  $("#runAll").disabled = true;
-  await Promise.all(rows.map((r,i) => runOne(r, i+1)));
-  $("#runAll").disabled = false; toast("All models finished");
+  const trials = Math.min(10, Math.max(1, parseInt($("#trials").value,10) || 1));
+  results = {}; attemptCount = {};
+  const at = new Date();
+  runMeta = { id:newRunId(at), at, trials, sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
+  log.push({ type:"RUN", at, text:`${runMeta.id} started · ${rows.length} model(s) × ${trials} trial(s) · temperature ${runMeta.temp} · max ${runMeta.maxTok} tokens` }); renderLog(true);
+  $("#runAll").disabled = $("#rerunAll").disabled = true;
+  for (let t = 1; t <= trials; t++) await Promise.all(rows.map((r,i) => runOne(r, i+1, trials > 1 ? t : null)));
+  $("#runAll").disabled = $("#rerunAll").disabled = false; toast("All models finished");
 }
 $("#runAll").onclick = runAll; $("#rerunAll").onclick = runAll;
 
@@ -289,28 +346,34 @@ $("#vCards").onclick = () => { view="cards"; renderResults(); };
 $("#vTable").onclick = () => { view="table"; renderResults(); };
 
 const ordered = () => rows.map(r => results[r.id] && { r, res:results[r.id] }).filter(Boolean);
+const calls = () => log.filter(e => e.type === "CALL").map(e => e.res);
+const callsFor = (rowId, runId) => calls().filter(a => a.rowId === rowId && a.runId === runId);
 
 function renderSummary(){
   const all = ordered().map(x => x.res);
   if (!all.length) { $("#summary").textContent = "Run the models to see results here."; return; }
   const ok = all.filter(x => x.state==="ok"), bad = all.filter(x => x.state==="error"), run = all.filter(x => x.state==="running");
   const fastest = ok.slice().sort((a,b) => a.ms-b.ms)[0], longest = ok.slice().sort((a,b) => b.words-a.words)[0], shortest = ok.slice().sort((a,b) => a.words-b.words)[0];
-  $("#summary").innerHTML = `${all.length} run · <span class="ok">${ok.length} ok</span> · <span class="bad">${bad.length} failed</span>${run.length?` · <span class="run">${run.length} running</span>`:""}`
+  $("#summary").innerHTML = (runMeta ? `<b>${esc(runMeta.id)}</b> · ` : "") + `${all.length} model(s) · <span class="ok">${ok.length} ok</span> · <span class="bad">${bad.length} failed</span>${run.length?` · <span class="run">${run.length} running</span>`:""}`
     + (fastest ? ` · fastest <b>${esc(fastest.label)}</b> ${fastest.ms} ms` : "")
     + (longest ? ` · longest <b>${esc(longest.label)}</b> ${longest.words} words` : "")
     + (shortest && ok.length > 1 ? ` · shortest <b>${esc(shortest.label)}</b> ${shortest.words} words` : "");
 }
 
 function pretty(x){ try { return JSON.stringify(typeof x === "string" ? JSON.parse(x) : x, null, 2); } catch (e) { return String(x ?? ""); } }
+const at = d => d ? stamp(d) + " " + tz : "–";
+const reqText = a => `REQUEST · sent ${at(a.sentAt)}\n${a.req.method} ${a.req.url}\n${Object.entries(a.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(a.req.body)}`;
+const resText = a => a.state === "running" ? "RESPONSE · waiting…" :
+  `RESPONSE · received ${at(a.gotAt)} · ${a.ms} ms · status ${a.status}${a.errType ? "\nError type: " + a.errType : ""}${a.error ? "\nError: " + a.error : ""}\n\n${a.raw ? pretty(a.raw) : "(no response body)"}`;
 
 function cardBody(res){
   if (res.state === "running") return `<p class="empty">Waiting for the answer…</p>`;
-  if (res.tab === "answer") return res.state === "ok" ? `<div class="answer">${esc(res.text || "(empty answer)")}</div>` : `<p class="bad">${esc(res.error)}</p>`;
-  if (res.tab === "request") return `<pre>${esc(`${res.req.method} ${res.req.url}\nSent: ${res.sentAt ? stamp(res.sentAt) + " " + tz : "not sent"}\n\nHeaders:\n${pretty(res.req.shownHeaders)}\n\nBody:\n${pretty(res.req.body)}`)}</pre>`;
-  if (res.tab === "response") return `<pre>${esc(`Status: ${res.status}\nReceived: ${res.gotAt ? stamp(res.gotAt) + " " + tz : "–"}\nTime: ${res.ms} ms\n\n${res.raw ? pretty(res.raw) : res.error || ""}`)}</pre>`;
-  const kv = [["Provider", res.label.split(" · ")[0]], ["Model asked", res.model], ["Model returned", res.modelReturned], ["Response id", res.id], ["Finish reason", res.finish],
+  if (res.tab === "answer") return res.state === "ok" ? `<div class="answer">${esc(res.text || "(empty answer)")}</div>` : `<p class="etype bad">${esc(res.errType||"")}</p><p class="bad">${esc(res.error)}</p>`;
+  if (res.tab === "request") return `<pre>${esc(reqText(res))}</pre>`;
+  if (res.tab === "response") return `<pre>${esc(resText(res))}</pre>`;
+  const kv = [["Run id", res.runId], ["Attempt", res.attempt + (res.trial ? ` (trial ${res.trial})` : "")], ["Provider", res.label.split(" · ")[0]], ["Model asked", res.model], ["Model returned", res.modelReturned], ["Response id", res.id], ["Finish reason", res.finish],
     ["Tokens in", res.tokIn], ["Tokens out", res.tokOut], ["Tokens total", res.tokTotal], ["Time", res.ms != null ? res.ms + " ms" : ""], ["Words", res.words], ["Characters", res.chars],
-    ["Sent", res.sentAt ? stamp(res.sentAt) : ""], ["Received", res.gotAt ? stamp(res.gotAt) : ""], ["HTTP status", res.status]];
+    ["Sent", res.sentAt ? stamp(res.sentAt) : ""], ["Received", res.gotAt ? stamp(res.gotAt) : ""], ["HTTP status", res.status], ["Error type", res.errType]];
   return `<div class="kv">${kv.map(([k,v]) => `<span>${k}</span><span>${esc(v ?? "–") || "–"}</span>`).join("")}</div>`;
 }
 
@@ -320,8 +383,8 @@ function renderResults(){
   $("#vCards").setAttribute("aria-pressed", view==="cards"); $("#vTable").setAttribute("aria-pressed", view==="table");
   $("#cards").hidden = view !== "cards"; $("#table").hidden = view !== "table";
   if (view === "table") {
-    $("#table").innerHTML = list.length ? `<table><thead><tr><th>#</th><th>Provider · model</th><th>Status</th><th>Time</th><th>In</th><th>Out</th><th>Total</th><th>Words</th><th>Finish</th></tr></thead><tbody>${
-      list.map(({res}) => `<tr><td>${res.idx}</td><td>${esc(res.label)}</td><td class="${res.state==="ok"?"ok":res.state==="error"?"bad":"run"}">${esc(res.state==="running"?"running":res.status)}</td><td class="num">${res.ms!=null?res.ms+" ms":"–"}</td><td class="num">${res.tokIn??"–"}</td><td class="num">${res.tokOut??"–"}</td><td class="num">${res.tokTotal??"–"}</td><td class="num">${res.words??"–"}</td><td>${esc(res.finish || (res.state==="error"?"error":"–"))}</td></tr>`).join("")
+    $("#table").innerHTML = list.length ? `<table><thead><tr><th>#</th><th>Provider · model</th><th>Attempt</th><th>Status</th><th>Error type</th><th>Time</th><th>In</th><th>Out</th><th>Total</th><th>Words</th><th>Finish</th></tr></thead><tbody>${
+      list.map(({res}) => `<tr><td>${res.idx}</td><td>${esc(res.label)}</td><td class="num">${res.attempt}</td><td class="${res.state==="ok"?"ok":res.state==="error"?"bad":"run"}">${esc(res.state==="running"?"running":res.status)}</td><td>${esc(res.errType||"–")}</td><td class="num">${res.ms!=null?res.ms+" ms":"–"}</td><td class="num">${res.tokIn??"–"}</td><td class="num">${res.tokOut??"–"}</td><td class="num">${res.tokTotal??"–"}</td><td class="num">${res.words??"–"}</td><td>${esc(res.finish || (res.state==="error"?"error":"–"))}</td></tr>`).join("")
     }</tbody></table>` : `<p class="empty">No results yet.</p>`;
     return;
   }
@@ -329,58 +392,115 @@ function renderResults(){
   if (!list.length) { box.innerHTML = `<p class="empty">No results yet.</p>`; return; }
   list.forEach(({r, res}) => {
     const el = document.createElement("article"); el.className = "card";
-    const statusTxt = res.state==="running" ? `<span class="run">● running</span>` : res.state==="ok" ? `<span class="ok">✓ ${res.status}</span> · ${res.ms} ms` : `<span class="bad">✗ ${esc(res.status)}</span> · ${res.ms} ms`;
+    const statusTxt = res.state==="running" ? `<span class="run">● running</span>` : res.state==="ok" ? `<span class="ok">✓ ${res.status}</span> · ${res.ms} ms` : `<span class="bad">✗ ${esc(res.status)}</span> · ${res.ms} ms · <span class="etype bad">${esc((res.errType||"").split(" (")[0].split(":")[0])}</span>`;
+    const hist = callsFor(r.id, res.runId).filter(a => a.state !== "running");
     el.innerHTML = `
       <div class="head"><span class="title">${res.idx}. ${esc(res.label)}</span>
-        <span class="stat">${statusTxt}</span>
-        ${res.state==="ok" ? `<span class="stat">in ${res.tokIn??"–"} · out ${res.tokOut??"–"} · ${res.words} words · finish: ${esc(res.finish||"–")}</span>` : ""}</div>
+        <span class="stat">${statusTxt} · attempt ${res.attempt}${res.trial?` (trial ${res.trial})`:""}</span>
+        ${res.state==="ok" ? `<span class="stat">in ${res.tokIn??"–"} · out ${res.tokOut??"–"} · ${res.words} words · finish: ${esc(res.finish||"–")}</span>` : ""}
+        ${res.warn ? `<span class="stat run">⚠ ${esc(res.warn)}</span>` : ""}
+        ${hist.length > 1 ? `<span class="attempts">All attempts: ${hist.map(a => `#${a.attempt} ${a.state==="ok"?"✓":"✗"} ${esc(a.status)} ${a.ms}ms`).join(" · ")}</span>` : ""}</div>
       <div class="tabs" role="tablist">${["answer","request","response","info"].map(t => `<button type="button" role="tab" aria-selected="${res.tab===t}" data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join("")}</div>
       <div class="body">${cardBody(res)}</div>
       <div class="foot">${res.state==="error" ? `<button type="button" class="btn small primary" data-retry>⟲ Retry</button>` : `<button type="button" class="btn small" data-retry ${res.state==="running"?"disabled":""}>⟲ Re-run</button>`}<button type="button" class="btn small" data-copy ${res.state==="running"?"disabled":""}>Copy</button></div>`;
     el.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { res.tab = b.dataset.t; renderResults(); });
-    el.querySelector("[data-retry]").onclick = () => runOne(r, res.idx);
+    el.querySelector("[data-retry]").onclick = () => runOne(r, res.idx, null);
     el.querySelector("[data-copy]").onclick = () => copy(mdForResult(res), "Copied this model's evidence");
     box.appendChild(el);
   });
 }
 
-/* ---------- Evidence ---------- */
-function addLog(idx, who, type, text, at){ log.push({ idx, who, type, text, at }); renderLog(); }
-function renderLog(){
-  $("#log").innerHTML = log.length ? log.map(e => `<div>${esc(stamp(e.at))} ${esc(tz)} · ${e.idx?esc(e.idx+". "):""}${esc(e.who)} · <b>${esc(e.type)}</b> · ${esc(e.text)}</div>`).join("") : `<span class="empty">Every request and response is recorded here with timestamps.</span>`;
-  $("#log").scrollTop = $("#log").scrollHeight;
+/* ---------- Evidence log ---------- */
+const openLog = new Set();
+$("#log").addEventListener("toggle", e => { const k = e.target.dataset.k; if (k) e.target.open ? openLog.add(k) : openLog.delete(k); }, true);
+function logLine(a){
+  const st = a.state === "running" ? "waiting…" : a.state === "ok" ? `✓ ${a.status}` : `✗ ${a.status} · ${a.errType||""}`;
+  return `${stamp(a.sentAt)} ${tz} · ${a.idx}. ${a.label} · attempt ${a.attempt}${a.trial?` (trial ${a.trial})`:""} · ${st}${a.ms!=null?` · ${a.ms} ms`:""}`;
 }
-$("#clearLog").onclick = () => { log = []; renderLog(); };
+function renderLog(scroll){
+  const box = $("#log");
+  box.innerHTML = log.length ? log.map((e,i) => e.type === "RUN"
+    ? `<div class="lrun">${esc(stamp(e.at))} ${esc(tz)} · <b>RUN</b> · ${esc(e.text)}</div>`
+    : `<details data-k="${i}" ${openLog.has(String(i))?"open":""}><summary class="${e.res.state==="ok"?"":e.res.state==="error"?"bad":"run"}">${esc(logLine(e.res))}</summary><pre>${esc(reqText(e.res))}</pre><pre>${esc(resText(e.res))}</pre></details>`).join("")
+    : `<span class="empty">Every request and response is recorded here with timestamps.</span>`;
+  if (scroll) box.scrollTop = box.scrollHeight;
+}
+$("#clearLog").onclick = () => { log = []; openLog.clear(); renderLog(); renderResults(); };
 
 const fence = (lang, s) => "```" + lang + "\n" + s + "\n```";
 function mdForResult(res){
-  const lines = [`### ${res.idx}. ${res.label}`, "",
+  const lines = [`### ${res.idx}. ${res.label} · attempt ${res.attempt}${res.trial?` (trial ${res.trial})`:""}`, "",
     `| Field | Value |`, `|---|---|`,
-    ...[["Status", res.status], ["Time", res.ms!=null?res.ms+" ms":"–"], ["Sent", res.sentAt?stamp(res.sentAt)+" "+tz:"–"], ["Received", res.gotAt?stamp(res.gotAt)+" "+tz:"–"],
+    ...[["Run id", res.runId], ["Status", res.status], ["Error type", res.errType||"–"], ["Time", res.ms!=null?res.ms+" ms":"–"], ["Sent", at(res.sentAt)], ["Received", at(res.gotAt)],
        ["Model asked", res.model], ["Model returned", res.modelReturned||"–"], ["Response id", res.id||"–"], ["Finish reason", res.finish||"–"],
+       ["Temperature / max tokens", `${res.req.settings.temperature} / ${res.req.settings.max_tokens}`],
        ["Tokens in / out / total", `${res.tokIn??"–"} / ${res.tokOut??"–"} / ${res.tokTotal??"–"}`], ["Words / characters", `${res.words??"–"} / ${res.chars??"–"}`]].map(([k,v]) => `| ${k} | ${String(v??"–").replace(/\|/g,"\\|")} |`),
     "", "**Answer**", "", res.state==="ok" ? fence("text", res.text) : `Error: ${res.error}`,
-    "", "**Request**", "", fence("http", `${res.req.method} ${res.req.url}\n${Object.entries(res.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(res.req.body)}`),
-    "", "**Response**", "", fence("json", res.raw ? pretty(res.raw) : (res.error||"")), ""];
+    "", "**Request**", "", fence("http", reqText(res)),
+    "", "**Response**", "", fence("json", resText(res)), ""];
   return lines.join("\n");
 }
 function fullMd(){
-  const list = ordered().map(x => x.res);
-  const m = runMeta || { at:new Date(), sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
-  return [`# Model comparison: evidence`, "",
-    `- Generated: ${stamp(new Date())} ${tz}`, `- Run started: ${stamp(m.at)} ${tz}`, `- Tool: API Bench · Compare models`, `- Temperature: ${m.temp} · Max length: ${m.maxTok} tokens`, `- API keys are replaced with placeholders such as \`<groq_key>\`.`, "",
-    "## Prompt", "", "**System / role**", "", fence("text", m.sys || "(none)"), "", "**User**", "", fence("text", m.user), "",
-    "## Comparison", "", "| # | Provider · model | Status | Time (ms) | Tokens in | Tokens out | Words | Finish |", "|---|---|---|---|---|---|---|---|",
-    ...list.map(r => `| ${r.idx} | ${r.label} | ${r.status??r.state} | ${r.ms??"–"} | ${r.tokIn??"–"} | ${r.tokOut??"–"} | ${r.words??"–"} | ${r.finish || (r.state==="error"?"error":"–")} |`), "",
-    "## Responses", "", ...list.map(mdForResult), "## Timeline", "", ...log.map(e => `- ${stamp(e.at)} ${tz} · ${e.idx?e.idx+". ":""}${e.who} · ${e.type} · ${e.text}`), ""].join("\n");
+  const list = ordered().map(x => x.res), all = calls();
+  const m = runMeta || { id:"–", at:new Date(), trials:1, sys:$("#sys").value, user:$("#user").value, temp:$("#temp").value, maxTok:$("#maxTok").value };
+  return mask([`# Model comparison: evidence`, "",
+    `- Run id: ${m.id}`, `- Generated: ${stamp(new Date())} ${tz}`, `- Run started: ${stamp(m.at)} ${tz}`, `- Tool: API Bench · Compare models`,
+    `- Temperature: ${m.temp} · Max length: ${m.maxTok} tokens · Trials per model: ${m.trials}`,
+    `- Keys: saved only in the browser, sent directly to each provider; shown here as placeholders such as \`<groq_key>\`.`, "",
+    "## Prompt", "", "**System / role**", "", fence("text", m.sys || "(none)"), "", "**User**", "", fence("text", m.user || ""), "",
+    "## Comparison (latest attempt per model)", "", "| # | Provider · model | Attempt | Status | Error type | Time (ms) | Tokens in | Tokens out | Words | Finish |", "|---|---|---|---|---|---|---|---|---|---|",
+    ...list.map(r => `| ${r.idx} | ${r.label} | ${r.attempt} | ${r.status??r.state} | ${r.errType||"–"} | ${r.ms??"–"} | ${r.tokIn??"–"} | ${r.tokOut??"–"} | ${r.words??"–"} | ${r.finish || (r.state==="error"?"error":"–")} |`), "",
+    `## All attempts in time order (${all.length}), full request and response`, "", ...all.map(mdForResult),
+    "## Timeline", "", ...log.map(e => `- ${e.type==="RUN" ? `${stamp(e.at)} ${tz} · RUN · ${e.text}` : logLine(e.res)}`), ""].join("\n"));
 }
-async function copy(text, msg){ try { await navigator.clipboard.writeText(text); toast(msg); } catch (e) { const t=document.createElement("textarea"); t.value=text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); toast(msg); } }
-$("#copyMd").onclick = () => { if (!Object.keys(results).length) return toast("Run the models first"); copy(fullMd(), "Copied all evidence as Markdown"); };
-$("#dlMd").onclick = () => {
-  if (!Object.keys(results).length) return toast("Run the models first");
-  const blob = new Blob([fullMd()], { type:"text/markdown" }), a = document.createElement("a");
-  const d = new Date(); a.href = URL.createObjectURL(blob); a.download = `model-comparison_${stamp(d).slice(0,19).replace(/[ :]/g,"-")}.md`; a.click(); URL.revokeObjectURL(a.href);
-};
+function answersMd(){
+  return mask(ordered().map(({res}) => `## ${res.idx}. ${res.label}\n${res.state==="ok" ? `(${res.ms} ms · ${res.tokOut??"–"} tokens out)\n\n${res.text}` : `Failed: ${res.status} · ${res.errType||""}\n${res.error||""}`}`).join("\n\n---\n\n"));
+}
+function runJson(){
+  const m = runMeta || {};
+  const iso = d => d ? d.toISOString() : null;
+  return mask(JSON.stringify({
+    tool:"API Bench · Compare models", generatedAt:new Date().toISOString(), timezone:tz,
+    keyHandling:"Keys are saved only in the browser and sent directly to each provider; replaced here by placeholders.",
+    run:{ id:m.id||null, startedAt:iso(m.at), trialsPerModel:m.trials||1, prompt:{ system:m.sys??"", user:m.user??"" }, settings:{ temperature:Number(m.temp), max_tokens:Number(m.maxTok) } },
+    attempts: calls().map(a => ({ runId:a.runId, modelNo:a.idx, provider:a.provider, model:a.model, attempt:a.attempt, trial:a.trial,
+      sentAt:iso(a.sentAt), receivedAt:iso(a.gotAt), latencyMs:a.ms ?? null, httpStatus:a.status ?? null, requestOk:a.state==="ok", errorType:a.errType||null, error:a.error||null,
+      prompt:a.req.prompt, settings:a.req.settings,
+      request:{ method:a.req.method, url:a.req.url, headers:a.req.shownHeaders, body:a.req.body },
+      response:{ body:a.json ?? a.raw ?? null },
+      extracted: a.state==="ok" ? { text:a.text, finishReason:a.finish, responseId:a.id, modelReturned:a.modelReturned, tokensIn:a.tokIn, tokensOut:a.tokOut, tokensTotal:a.tokTotal, words:a.words, chars:a.chars } : null }))
+  }, null, 2));
+}
+
+/* ---------- Copy: clipboard, else show the text selected so Ctrl/Cmd+C works ---------- */
+function showCopyBox(text){
+  const d = $("#copyBox"), t = $("#cbText"); t.value = text;
+  if (d.showModal) d.showModal(); else d.setAttribute("open","");
+  t.focus(); t.select();
+}
+$("#cbSel").onclick = () => { $("#cbText").focus(); $("#cbText").select(); };
+$("#cbClose").onclick = () => $("#copyBox").close ? $("#copyBox").close() : $("#copyBox").removeAttribute("open");
+async function copy(text, msg){
+  text = mask(text);
+  try {
+    if (!navigator.clipboard || !window.isSecureContext) throw new Error("no clipboard");
+    await navigator.clipboard.writeText(text); toast(msg + ` (${Math.round(text.length/1000)}k characters)`);
+  } catch (e) {
+    let ok = false;
+    try { const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.focus(); t.select(); ok = document.execCommand("copy"); t.remove(); } catch (e2) {}
+    ok ? toast(msg) : showCopyBox(text);
+  }
+}
+const hasCalls = () => calls().length > 0 || (toast("Run the models first"), false);
+$("#copyAnswers").onclick = () => { if (ordered().length) copy(answersMd(), "Copied all answers"); else toast("Run the models first"); };
+$("#copyMd").onclick = () => { if (hasCalls()) copy(fullMd(), "Copied all evidence"); };
+function download(text, ext, type){
+  const blob = new Blob([text], { type }), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `model-comparison_${(runMeta?.id || newRunId(new Date()))}.${ext}`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$("#dlMd").onclick = () => { if (hasCalls()) download(fullMd(), "md", "text/markdown"); };
+$("#dlJson").onclick = () => { if (hasCalls()) download(runJson(), "json", "application/json"); };
 
 renderModels(); renderResults();
 </script>
