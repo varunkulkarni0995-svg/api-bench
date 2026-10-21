@@ -123,8 +123,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
   <div class="cards" id="cards"></div>
   <div id="table" hidden></div>
   <div id="convoBar" hidden style="margin-top:14px">
-    <label>Next message to all models<textarea id="nextMsg" rows="2" placeholder="e.g. Now make it cheaper."></textarea></label>
-    <div class="row" style="margin-top:8px"><button type="button" class="btn small primary" id="sendNext">Send ▶</button><button type="button" class="btn small" id="newSession">⟲ New session</button><span class="empty" id="sessInfo"></span></div>
+    <div class="row"><button type="button" class="btn small" id="newSession">⟲ New session</button><span class="empty" id="sessInfo"></span></div>
   </div>
 </section>
 
@@ -392,11 +391,12 @@ async function runOne(r, idx, trial, userText, turn){
   renderResults(); renderLog();
 }
 
-function busy(on){ ["#runAll","#rerunAll","#sendNext"].forEach(s => { $(s).disabled = on; }); }
+function busy(on){ ["#runAll","#rerunAll"].forEach(s => { $(s).disabled = on; }); }
 
 async function runAll(){
   if (!$("#user").value.trim()) { toast("Write a user prompt first"); $("#user").focus(); return; }
   if (!rows.length) { toast("Add at least one model"); return; }
+  if (mode === "convo" && convo.turn) return sendNext();
   const trials = mode === "convo" ? 1 : Math.min(10, Math.max(1, parseInt($("#trials").value,10) || 1));
   results = {}; attemptCount = {};
   if (mode === "convo") { convo = { id:convo.id + (convo.turn ? 1 : 0), turn:1, hist:{} }; }
@@ -405,32 +405,32 @@ async function runAll(){
   log.push({ type:"RUN", at, text:`${runMeta.id} started · ${mode === "convo" ? `conversation session ${convo.id}, turn 1` : "single turn"} · ${rows.length} model(s) × ${trials} trial(s) · temperature ${st.temperature} · max ${st.max_tokens} tokens${st.seed !== null ? ` · seed ${st.seed}` : ""}` }); renderLog(true);
   busy(true);
   for (let t = 1; t <= trials; t++) await Promise.all(rows.map((r,i) => runOne(r, i+1, trials > 1 ? t : null, $("#user").value, mode === "convo" ? 1 : null)));
-  busy(false); renderConvoBar(); toast("All models finished");
+  busy(false); if (mode === "convo") $("#user").value = ""; renderConvoBar(); toast("All models finished");
 }
 $("#runAll").onclick = runAll; $("#rerunAll").onclick = runAll;
 
 async function sendNext(){
-  const text = $("#nextMsg").value;
-  if (!convo.turn) { toast("Start the conversation with Run all first"); return; }
-  if (!text.trim()) { toast("Write the next message first"); $("#nextMsg").focus(); return; }
+  const text = $("#user").value;
+  if (!text.trim()) { toast("Write the next message first"); $("#user").focus(); return; }
   convo.turn++; attemptCount = {};
   log.push({ type:"RUN", at:new Date(), text:`${runMeta.id} · session ${convo.id} · turn ${convo.turn} sent to ${rows.length} model(s)` }); renderLog(true);
   busy(true);
   await Promise.all(rows.map((r,i) => runOne(r, i+1, null, text, convo.turn)));
-  busy(false); $("#nextMsg").value = ""; renderConvoBar(); toast(`Turn ${convo.turn} finished`);
+  busy(false); $("#user").value = ""; renderConvoBar(); toast(`Turn ${convo.turn} finished`);
 }
-$("#sendNext").onclick = sendNext;
-$("#newSession").onclick = () => { convo = { id:convo.id + 1, turn:0, hist:{} }; results = {}; renderResults(); renderConvoBar(); toast(`New session ${convo.id}: write the first message and Run all`); };
+$("#newSession").onclick = () => { convo = { id:convo.id + 1, turn:0, hist:{} }; results = {}; renderResults(); renderConvoBar(); toast(`New session ${convo.id} started`); };
 
 function renderConvoBar(){
   $("#convoBar").hidden = mode !== "convo";
-  $("#sessInfo").textContent = convo.turn ? `Session ${convo.id} · ${convo.turn} turn(s) so far · each model keeps its own history` : `Session ${convo.id} · start with Run all`;
+  $("#sessInfo").textContent = convo.turn ? `Session ${convo.id} · ${convo.turn} turn(s) so far · each model keeps its own history. Type your next message above and press Send.` : `Session ${convo.id} · type the first message above and press Start.`;
+  $("#runAll").textContent = mode !== "convo" ? "▶ Run all" : convo.turn ? `▶ Send turn ${convo.turn + 1}` : "▶ Start conversation";
+  $("#rerunAll").hidden = mode === "convo";
+  $("#userLbl").textContent = mode !== "convo" ? "User prompt" : convo.turn ? `Your message (turn ${convo.turn + 1})` : "First message";
 }
 function setMode(m){
   mode = m;
   $("#mSingle").setAttribute("aria-pressed", m === "single"); $("#mConvo").setAttribute("aria-pressed", m === "convo");
-  $("#modeHint").textContent = m === "single" ? "Each run is a fresh, one-message test." : "Run all sends the first message; then send follow-ups. Each model keeps its own history; New session clears it.";
-  $("#userLbl").textContent = m === "single" ? "User prompt" : "First message";
+  $("#modeHint").textContent = m === "single" ? "Each run is a fresh, one-message test." : "Type a message and press Send; each send continues the same conversation. New session starts over.";
   $("#trials").disabled = m === "convo";
   results = {}; convo = { id:convo.id + (convo.turn ? 1 : 0), turn:0, hist:{} };
   renderResults(); renderConvoBar();
