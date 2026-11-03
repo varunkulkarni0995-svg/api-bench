@@ -37,6 +37,7 @@ textarea{font-family:var(--font-mono);font-size:13px;resize:vertical}
 .mrow .idx{font:600 13px var(--font-mono);color:var(--muted);text-align:center}
 .mrow .custom{grid-column:2 / 5;display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .mrow .hint{grid-column:2 / 5;font-size:12px;color:var(--muted)}
+.mrow .caps{grid-column:2 / 5}
 .keyok{color:var(--ok)}.keybad{color:var(--bad)}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
@@ -77,36 +78,52 @@ td.num{font-family:var(--font-mono)}
 .attempts{font-size:12px;color:var(--muted)}
 dialog{border:1px solid var(--line);border-radius:10px;padding:16px;width:min(760px,92vw)}
 dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing:border-box}
-@media (max-width:760px){.wrap{padding:12px}.mrow{grid-template-columns:24px minmax(0,1fr) 36px}.mrow>*{min-width:0}.mrow [data-del]{grid-row:1;grid-column:3}.mrow>*:nth-child(3),.mrow>*:nth-child(4),.mrow .custom,.mrow .hint{grid-column:2 / 4}.card{flex-basis:300px}}
+.caps{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px}
+.cap{border:1px solid var(--line);border-radius:999px;padding:1px 7px;font-size:11px;line-height:1.6;white-space:nowrap}
+.cap.yes{border-color:#2d7a4a;color:#2d7a4a}
+.cap.no{color:var(--muted)}
+.cap.src{border:0;color:var(--muted);padding:1px 2px}
+.att{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);display:flex;gap:12px;align-items:flex-start;margin-top:4px}
+.att .thumb{width:72px;height:52px;border:1px solid var(--line);border-radius:6px;object-fit:contain;background:#fff;flex:0 0 auto}
+.att .pdfic{width:72px;height:52px;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto}
+.att .meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.att .nm{font-weight:600;word-break:break-all}
+.warnline{color:#8a5a00}
+@media (max-width:760px){.wrap{padding:12px}.mrow{grid-template-columns:24px minmax(0,1fr) 36px}.mrow>*{min-width:0}.mrow [data-del]{grid-row:1;grid-column:3}.mrow>*:nth-child(3),.mrow>*:nth-child(4),.mrow .custom,.mrow .hint,.mrow .caps{grid-column:2 / 4}.card{flex-basis:300px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a><h1>Compare models <span class="empty" style="font-size:12px;font-weight:400">v1.3.4</span></h1></div>
+  <div><a href="./">← API Bench</a><h1>Compare models <span class="empty" style="font-size:12px;font-weight:400">v1.4.0</span></h1></div>
   <span class="empty">Same prompt to several Gen AI models. Keys are saved only in this browser and go straight to each provider (no server in between). Copies and exports show placeholders such as &lt;groq_key&gt;, never the key.</span>
 </header>
 
+<section class="panel" aria-labelledby="p2">
+  <h2 id="p2"><span class="n">1</span>Models</h2>
+  <div class="models" id="models"></div>
+  <div class="toolbar">
+    <button type="button" class="btn" id="addModel">+ Add model</button>
+    <button type="button" class="btn primary" id="runAll">▶ Run all</button>
+  </div>
+</section>
+
 <section class="panel" aria-labelledby="p1">
-  <h2 id="p1"><span class="n">1</span>Prompt (same for all models)</h2>
+  <h2 id="p1"><span class="n">2</span>Prompt (same for all models)</h2>
   <div class="row" style="margin-bottom:8px"><div class="seg" role="group" aria-label="Mode"><button type="button" id="mSingle" aria-pressed="true">Single turn</button><button type="button" id="mConvo" aria-pressed="false">Conversation</button></div>
   <span class="empty" id="modeHint">Each run is a fresh, one-message test.</span></div>
   <label>System / role<textarea id="sys" rows="2" placeholder="e.g. You are a payments product manager. Answer briefly."></textarea></label>
   <label><span id="userLbl">User prompt</span><textarea id="user" rows="4" placeholder="e.g. Explain UPI in 3 lines."></textarea></label>
+  <label style="display:block">Attachment (image or PDF) — sent with the prompt to every model that accepts it
+    <span class="row" style="margin-top:6px"><input type="file" id="attFile" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" style="max-width:100%">
+    <button type="button" class="btn small" id="attClear" hidden>Remove</button></span>
+  </label>
+  <div id="attBox" hidden></div>
   <div class="row">
     <label>Temperature<input id="temp" type="number" min="0" max="2" step="0.1" value="0.7" style="width:110px"></label>
     <label>Max length (tokens)<input id="maxTok" type="number" min="1" step="1" value="512" style="width:150px"></label>
     <label>Trials per model<input id="trials" type="number" min="1" max="10" step="1" value="1" style="width:120px"></label>
     <label>Seed (optional)<input id="seed" type="number" step="1" placeholder="e.g. 42" style="width:130px"></label>
-  </div>
-</section>
-
-<section class="panel" aria-labelledby="p2">
-  <h2 id="p2"><span class="n">2</span>Models</h2>
-  <div class="models" id="models"></div>
-  <div class="toolbar">
-    <button type="button" class="btn" id="addModel">+ Add model</button>
-    <button type="button" class="btn primary" id="runAll">▶ Run all</button>
   </div>
 </section>
 
@@ -172,6 +189,63 @@ const PROVIDERS = {
   anthropic:  { name:"Anthropic (Claude)", key:"anthropic_key", keyLink:"https://console.anthropic.com/settings/keys", kind:"anthropic", base:"https://api.anthropic.com/v1", def:"claude-haiku-5-5", paid:true },
   custom:     { name:"Custom (OpenAI-compatible)", key:null, kind:"openai", base:"", def:"" }
 };
+
+/* The file chosen in section 2, or null. Held in memory only: never saved to the
+   browser store and never written into an export (only its name, type, size, fingerprint). */
+let attachment = null;
+const MAX_ATT_MB = 3.75;
+
+/* ---------- What each model can be sent (image / PDF) ----------
+   Three sources, best first:
+     1 "provider list"  – the provider's own model list said so (OpenRouter reports this)
+     2 "known family"   – matched a model family we have checked
+     3 "name guess"     – the id looks multimodal (vl / vision / omni)
+   Anything else is treated as text only. The source is shown on the row so a
+   result is never mistaken for a fair comparison when the file was not sent. */
+const FAMILY_CAPS = [
+  // text-only families that would otherwise be caught by a looser rule below
+  { re:/gpt-oss/i,                                   image:false },
+  { re:/^command-(a|r)(?!.*vision)/i,                image:false },
+  { re:/^deepseek/i,                                 image:false },
+  { re:/^(mixtral|codestral|ministral)/i,            image:false },
+  { re:/^(o1|o3)-mini/i,                             image:false },
+  // vision families
+  { re:/^claude-/i,                                  image:true  },
+  { re:/^gemini-/i,                                  image:true  },
+  { re:/^gemma-([3-9]|\d\d)/i,                       image:true  },
+  { re:/^gpt-(4o|4\.1|4-turbo|5)/i,                  image:true  },
+  { re:/^(o1|o3|o4)\b/i,                             image:true  },
+  { re:/pixtral/i,                                   image:true  },
+  { re:/^mistral-(small|medium|large)-3/i,           image:true  },
+  { re:/llama-(3\.2|4)/i,                            image:true  },
+  { re:/(scout|maverick)/i,                          image:true  },
+  { re:/qwen.*-vl/i,                                 image:true  },
+  { re:/-vl\b|vision/i,                              image:true  },
+  { re:/nova-(lite|pro|premier)/i,                   image:true  },
+  { re:/grok-(2-vision|3|4)/i,                       image:true  }
+];
+// PDFs: only these routes take a PDF in the same call. Elsewhere a PDF is not sent.
+const pdfRoute = r => {
+  const P = PROVIDERS[r.provider];
+  if (!P) return false;
+  if (P.kind === "gemini" || P.kind === "anthropic") return true;   // native document support
+  return r.provider === "openrouter";                               // OpenRouter accepts a file part
+};
+function capsFor(r){
+  const id = (r.model || "").trim();
+  if (!id) return { image:false, pdf:false, src:"no model chosen" };
+  if (r.capMode === "force")  return { image:true,  pdf:pdfRoute(r), src:"set by you" };
+  if (r.capMode === "textonly") return { image:false, pdf:false, src:"set by you" };
+  const fromList = savedList(r)?.caps?.[id];
+  if (fromList) return { image:!!fromList.image, pdf:!!fromList.image && pdfRoute(r), src:"provider list" };
+  const fam = FAMILY_CAPS.find(f => f.re.test(id));
+  if (fam) return { image:fam.image, pdf:fam.image && pdfRoute(r), src:"known family" };
+  if (/vl|vision|omni|multimodal/i.test(id)) return { image:true, pdf:pdfRoute(r), src:"name guess" };
+  return { image:false, pdf:false, src:"not known — treated as text only" };
+}
+// true when the current attachment can go to this row
+const takesAtt = r => !attachment ? false : (attachment.isPdf ? capsFor(r).pdf : capsFor(r).image);
+
 const secret = k => store.get("apibench.secret."+k, "");
 const setSecret = (k,v) => store.set("apibench.secret."+k, v);
 const modelCache = {};
@@ -188,7 +262,7 @@ async function listModels(r, force){
   if (!force && modelCache[cacheKey]) return modelCache[cacheKey];
   if (!base) throw new Error("Enter the base URL first");
   if (!key && !P.listNoKey) throw new Error("Add a key to load the model list");
-  let ids = [];
+  let ids = [], caps = {};
   if (P.kind === "gemini") {
     const res = await fetch(base + "/models?pageSize=200", { headers:{ "x-goog-api-key": key } });
     const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || res.status);
@@ -199,11 +273,16 @@ async function listModels(r, force){
     const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || j.message || res.status);
     const arr = Array.isArray(j) ? j : (j.data || j.models || []);
     ids = arr.map(m => m.id || m.name).filter(Boolean);
+    arr.forEach(m => {
+      const id = m.id || m.name; if (!id) return;
+      const im = m.architecture?.input_modalities || m.input_modalities;
+      if (Array.isArray(im)) caps[id] = { image: im.includes("image"), file: im.includes("file") };
+    });
   }
   let hidden = [];
   if (r.provider === "groq") { hidden = ids.filter(id => GROQ_NON_CHAT.test(id)); ids = ids.filter(id => !GROQ_NON_CHAT.test(id)); }
   ids.sort((a,b) => (b.endsWith(":free") - a.endsWith(":free")) || a.localeCompare(b));
-  const out = { ids, hidden, at: Date.now() };
+  const out = { ids, hidden, caps, at: Date.now() };
   store.set(listKey(r), out);
   return (modelCache[cacheKey] = out);
 }
@@ -218,7 +297,7 @@ let rows = store.get("apibench.compare.rows", null) || [
   { provider:"gemini", model:PROVIDERS.gemini.def }, { provider:"groq", model:"" }, { provider:"openrouter", model:"" }
 ];
 rows.forEach(r => { r.id = r.id || Math.random().toString(36).slice(2,9); });
-const saveRows = () => store.set("apibench.compare.rows", rows.map(({id,provider,model,base,customName}) => ({id,provider,model,base,customName})));
+const saveRows = () => store.set("apibench.compare.rows", rows.map(({id,provider,model,base,customName,capMode}) => ({id,provider,model,base,customName,capMode})));
 
 function renderModels(){
   const box = $("#models"); box.innerHTML = "";
@@ -232,7 +311,8 @@ function renderModels(){
       <span>${r.provider==="custom" ? "" : `<input aria-label="Key ${i+1}" type="password" value="${esc(secret(P.key))}" placeholder="API key" style="width:100%"><span class="${hasKey?"keyok":"keybad"}" style="font-size:12px">${hasKey?"✓ key saved in this browser":`✗ no key · <a href="${P.keyLink}" target="_blank" rel="noopener">get one</a>`}${P.paid?" · paid: add credit to your account first":""}</span>`}</span>
       <button type="button" class="btn small" aria-label="Remove model ${i+1}" data-del>✕</button>
       ${r.provider==="custom" ? `<div class="custom"><input aria-label="Name" placeholder="Name, e.g. Mistral" value="${esc(r.customName||"")}" data-f="customName"><input aria-label="Base URL" placeholder="Base URL, e.g. https://api.mistral.ai/v1" value="${esc(r.base||"")}" data-f="base"><input aria-label="Custom key" type="password" placeholder="API key (kept for this session only)" value="${esc(r.key||"")}" data-f="key" style="grid-column:1 / 3"></div>` : ""}
-      <span class="hint" data-hint></span>`;
+      <span class="hint" data-hint></span>
+      <span class="caps" data-caps></span>`;
     const [provSel] = el.querySelectorAll("select");
     provSel.onchange = () => { r.provider = provSel.value; r.model = PROVIDERS[r.provider].def; saveRows(); renderModels(); };
     const modelIn = el.querySelector("[data-model]");
@@ -256,13 +336,83 @@ function renderModels(){
     if (saved?.ids?.length) showList(saved, false);
     el.querySelector("[data-load]").onclick = async () => {
       hint.textContent = "Loading models…";
-      try { showList(await listModels(r, true), true); el.querySelector("[data-load]").textContent = "Refresh list"; }
+      try { showList(await listModels(r, true), true); el.querySelector("[data-load]").textContent = "Refresh list"; drawCaps(); renderAtt(); }
       catch (e) { hint.textContent = "Couldn't load the list: " + e.message; }
     };
+    const capBox = el.querySelector("[data-caps]");
+    const drawCaps = () => {
+      const c = capsFor(r);
+      const pill = (on, label) => `<span class="cap ${on?"yes":"no"}">${on?"":"✕ "}${label}</span>`;
+      capBox.innerHTML = pill(c.image,"🖼 image") + pill(c.pdf,"📄 pdf") +
+        `<span class="cap src">${esc(c.src)}</span>` +
+        `<select data-capmode aria-label="What model ${i+1} accepts" style="font-size:11px;padding:1px 4px">
+           <option value="auto" ${!r.capMode||r.capMode==="auto"?"selected":""}>auto</option>
+           <option value="force" ${r.capMode==="force"?"selected":""}>accepts files</option>
+           <option value="textonly" ${r.capMode==="textonly"?"selected":""}>text only</option>
+         </select>`;
+      capBox.querySelector("[data-capmode]").onchange = e => { r.capMode = e.target.value; saveRows(); renderModels(); renderAtt(); };
+    };
+    drawCaps();
+    modelIn.addEventListener("input", () => { drawCaps(); renderAtt(); });
     box.appendChild(el);
   });
+  renderAtt();
 }
 $("#addModel").onclick = () => { rows.push({ id:Math.random().toString(36).slice(2,9), provider:"groq", model:"" }); saveRows(); renderModels(); };
+
+/* ---------- Attachment: read the file, show who gets it ---------- */
+const fmtBytes = n => n < 1024 ? n+" B" : n < 1048576 ? (n/1024).toFixed(0)+" KB" : (n/1048576).toFixed(2)+" MB";
+
+async function sha256Hex(buf){
+  try {
+    const h = await crypto.subtle.digest("SHA-256", buf);
+    return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2,"0")).join("");
+  } catch(e){ return null; }
+}
+function bufToB64(buf){
+  const bytes = new Uint8Array(buf); let bin = "";
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i+8192));
+  return btoa(bin);
+}
+function renderAtt(){
+  const box = $("#attBox"), clear = $("#attClear");
+  if (!attachment) { box.hidden = true; box.innerHTML = ""; clear.hidden = true; return; }
+  clear.hidden = false;
+  const can = rows.filter(r => takesAtt(r)), cant = rows.filter(r => !takesAtt(r));
+  const kind = attachment.isPdf ? "PDF" : "image";
+  const thumb = attachment.isPdf
+    ? `<div class="pdfic">📄</div>`
+    : `<img class="thumb" alt="attachment preview" src="data:${attachment.mime};base64,${attachment.b64}">`;
+  box.hidden = false;
+  box.innerHTML = `<div class="att">${thumb}<div class="meta">
+      <span class="nm">${esc(attachment.name)}</span>
+      <span class="empty">${esc(attachment.mime)} · ${fmtBytes(attachment.bytes)} · fingerprint ${esc((attachment.sha||"").slice(0,12))}…</span>
+      <span>Sent to <b>${can.length}</b> of ${rows.length} models.</span>
+      ${cant.length ? `<span class="warnline">⊘ Not sent to: ${cant.map(r => esc(r.model||"(no model)")).join(", ")} — these are run on the text alone and the result is marked so.</span>` : ""}
+      ${attachment.isPdf ? `<span class="empty">A PDF only goes to Gemini, Claude and OpenRouter rows; other routes cannot take one in the same call.</span>` : ""}
+    </div></div>`;
+}
+$("#attFile").onchange = async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) { attachment = null; renderAtt(); return; }
+  if (f.size > MAX_ATT_MB * 1048576) {
+    toast(`That file is ${fmtBytes(f.size)}. Providers reject anything over about ${MAX_ATT_MB} MB — use a smaller one.`);
+    e.target.value = ""; attachment = null; renderAtt(); return;
+  }
+  const buf = await f.arrayBuffer();
+  const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+  attachment = { name:f.name, mime:f.type || (isPdf ? "application/pdf" : "application/octet-stream"),
+                 bytes:f.size, isPdf, b64:bufToB64(buf), sha:await sha256Hex(buf) };
+  renderAtt();
+  toast(`${isPdf ? "PDF" : "Image"} ready — ${rows.filter(r => takesAtt(r)).length} of ${rows.length} models can take it`);
+};
+$("#attClear").onclick = () => { attachment = null; $("#attFile").value = ""; renderAtt(); };
+// what went with a given call, recorded on the result
+const attMetaFor = r => !attachment ? null : {
+  name:attachment.name, mime:attachment.mime, bytes:attachment.bytes,
+  sha256:attachment.sha, sent:takesAtt(r),
+  reason: takesAtt(r) ? null : (attachment.isPdf ? "this route does not accept a PDF in the same call" : "model is text only (" + capsFor(r).src + ")")
+};
 
 /* ---------- Running ---------- */
 let results = {};      // row id -> latest attempt
@@ -311,10 +461,12 @@ function buildRequest(r, userText, history){
   if (skipT) { settings.temperature = null; settings.tempNote = "temperature not sent: this model rejects it"; }
   if (P.kind === "anthropic" && !skipT) { settings.temperature = Math.min(temperature, 1); }
   if (P.kind === "anthropic") { if (seed !== null) settings.seedNote = "seed not supported by Anthropic; not sent"; }
-  const meta = { prompt:{ system:sys, user, historyMessages:hist.length }, settings };
+  const att = attMetaFor(r), withFile = !!(att && att.sent);
+  const meta = { prompt:{ system:sys, user, historyMessages:hist.length, attachment:att }, settings };
   if (P.kind === "gemini") {
     const contents = hist.map(m => ({ role:m.role === "assistant" ? "model" : "user", parts:[{ text:m.content }] }));
-    contents.push({ role:"user", parts:[{ text:user }] });
+    const uParts = withFile ? [{ inline_data:{ mime_type:attachment.mime, data:attachment.b64 } }, { text:user }] : [{ text:user }];
+    contents.push({ role:"user", parts:uParts });
     const body = { contents, generationConfig:{ ...(skipT ? {} : { temperature }), maxOutputTokens:maxTok } };
     if (seed !== null) body.generationConfig.seed = seed;
     if (sys.trim()) body.systemInstruction = { parts:[{ text:sys }] };
@@ -322,14 +474,26 @@ function buildRequest(r, userText, history){
       headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, shownHeaders:{ "Content-Type":"application/json", "x-goog-api-key":`<${kn}>` }, body };
   }
   if (P.kind === "anthropic") {
-    const body = { model:r.model, max_tokens:maxTok, ...(skipT ? {} : { temperature:Math.min(temperature, 1) }), messages:[...hist.map(m => ({ role:m.role, content:m.content })), { role:"user", content:user }] };
+    const uContent = withFile
+      ? [ attachment.isPdf
+            ? { type:"document", source:{ type:"base64", media_type:"application/pdf", data:attachment.b64 } }
+            : { type:"image",    source:{ type:"base64", media_type:attachment.mime, data:attachment.b64 } },
+          { type:"text", text:user } ]
+      : user;
+    const body = { model:r.model, max_tokens:maxTok, ...(skipT ? {} : { temperature:Math.min(temperature, 1) }), messages:[...hist.map(m => ({ role:m.role, content:m.content })), { role:"user", content:uContent }] };
     if (sys.trim()) body.system = sys;
     const h = anthHeaders(key);
     return { ...meta, url:`${base}/messages`, method:"POST", headers:{ "Content-Type":"application/json", ...h },
       shownHeaders:{ "Content-Type":"application/json", ...h, "x-api-key":`<${kn}>` }, body };
   }
   const messages = []; if (sys.trim()) messages.push({ role:"system", content:sys });
-  hist.forEach(m => messages.push({ role:m.role, content:m.content })); messages.push({ role:"user", content:user });
+  hist.forEach(m => messages.push({ role:m.role, content:m.content }));
+  const dataUrl = withFile ? `data:${attachment.mime};base64,${attachment.b64}` : null;
+  const oaContent = !withFile ? user
+    : attachment.isPdf
+      ? [ { type:"file", file:{ filename:attachment.name, file_data:dataUrl } }, { type:"text", text:user } ]
+      : [ { type:"image_url", image_url:{ url:dataUrl } }, { type:"text", text:user } ];
+  messages.push({ role:"user", content:oaContent });
   const body = { model:r.model, messages, ...(skipT ? {} : { temperature }), [P.maxKey || "max_tokens"]:maxTok };
   if (seed !== null) body[P.seedKey || "seed"] = seed;
   return { ...meta, url:`${base}/chat/completions`, method:"POST",
@@ -363,6 +527,7 @@ function flagsFor(res){
   if (!String(res.text||"").trim()) f.push(thought ? "Empty answer: thinking used up the max-length budget. Raise Max length." : cut ? "Empty answer: hit max length. Raise Max length." : "Empty answer");
   else if (cut) f.push(`Cut off: hit max length${res.tokThink ? ` (thinking used ${res.tokThink} tokens)` : ""}. Raise Max length.`);
   if (REFUSAL.test(String(res.text||"").slice(0,400))) f.push("Possible refusal (auto-detected; check the answer)");
+  if (res.att && !res.att.sent) f.push(`⊘ ${/pdf/i.test(res.att.mime) ? "PDF" : "Image"} not sent — ${res.att.reason}. Answer is from the text alone.`);
   return f;
 }
 
@@ -388,7 +553,7 @@ async function runOne(r, idx, trial, userText, turn){
   const req = buildRequest(r, userText, history);
   const attempt = (attemptCount[r.id] = (attemptCount[r.id]||0) + 1);
   const res = { runId:runMeta.id, rowId:r.id, idx, label:label(r), provider:r.provider, model:r.model, state:"running", req, tab:prev?.tab || "answer",
-    attempt, trial:trial||null, warn:listWarning(r), sentAt:new Date(), userText,
+    attempt, trial:trial||null, warn:listWarning(r), sentAt:new Date(), userText, att:req.prompt.attachment,
     sessionId: mode === "convo" ? convo.id : null, turn: mode === "convo" ? turn : null, flags:[] };
   results[r.id] = res; log.push({ type:"CALL", res, at:res.sentAt }); renderResults(); renderLog(true);
   const bad = precheck(r);
@@ -423,18 +588,34 @@ async function runOne(r, idx, trial, userText, turn){
 
 function busy(on){ ["#runAll","#rerunAll"].forEach(s => { $(s).disabled = on; }); }
 
+/* Paid rows cost real money. Ask once per page load before the first paid call. */
+let paidOk = false;
+function paidGate(){
+  const paid = rows.filter(r => PROVIDERS[r.provider]?.paid && r.model && keyOf(r));
+  if (!paid.length || paidOk) return true;
+  const names = paid.map(r => `${PROVIDERS[r.provider].name} · ${r.model}`).join("\n  ");
+  const trials = Math.max(1, Number($("#trials").value) || 1);
+  const ok = confirm(`These rows are on paid plans and will be charged to your own account:\n\n  ${names}\n\n${paid.length} model(s) × ${trials} trial(s) = ${paid.length*trials} paid call(s).\n\nRun them?\n\n(Cancel runs only the free rows.)`);
+  if (ok) paidOk = true;
+  return ok;
+}
+const runnableRows = () => paidOk ? rows : rows.filter(r => !(PROVIDERS[r.provider]?.paid && r.model && keyOf(r)));
+
 async function runAll(){
   if (!$("#user").value.trim()) { toast("Write a user prompt first"); $("#user").focus(); return; }
   if (!rows.length) { toast("Add at least one model"); return; }
   if (mode === "convo" && convo.turn) return sendNext();
+  paidGate();
+  const live = runnableRows();
+  if (!live.length) { toast("Nothing to run: the only rows set up are paid ones and you cancelled."); return; }
   const trials = mode === "convo" ? 1 : Math.min(10, Math.max(1, parseInt($("#trials").value,10) || 1));
   results = {}; attemptCount = {};
   if (mode === "convo") { convo = { id:convo.id + (convo.turn ? 1 : 0), turn:1, hist:{} }; }
   const at = new Date(), st = settingsNow();
   runMeta = { id:newRunId(at), at, trials, mode, sys:$("#sys").value, user:$("#user").value, temp:st.temperature, maxTok:st.max_tokens, seed:st.seed };
-  log.push({ type:"RUN", at, text:`${runMeta.id} started · ${mode === "convo" ? `conversation session ${convo.id}, turn 1` : "single turn"} · ${rows.length} model(s) × ${trials} trial(s) · temperature ${st.temperature} · max ${st.max_tokens} tokens${st.seed !== null ? ` · seed ${st.seed}` : ""}` }); renderLog(true);
+  log.push({ type:"RUN", at, text:`${runMeta.id} started · ${mode === "convo" ? `conversation session ${convo.id}, turn 1` : "single turn"} · ${live.length} model(s) × ${trials} trial(s)${attachment ? ` · attachment ${attachment.name} (${attachment.mime}, ${attachment.bytes} bytes, sha256 ${(attachment.sha||"").slice(0,16)}…) sent to ${live.filter(takesAtt).length} of ${live.length}` : ""} · temperature ${st.temperature} · max ${st.max_tokens} tokens${st.seed !== null ? ` · seed ${st.seed}` : ""}` }); renderLog(true);
   busy(true);
-  for (let t = 1; t <= trials; t++) await Promise.all(rows.map((r,i) => runOne(r, i+1, trials > 1 ? t : null, $("#user").value, mode === "convo" ? 1 : null)));
+  for (let t = 1; t <= trials; t++) await Promise.all(live.map((r) => runOne(r, rows.indexOf(r)+1, trials > 1 ? t : null, $("#user").value, mode === "convo" ? 1 : null)));
   busy(false); if (mode === "convo") $("#user").value = ""; renderConvoBar(); toast("All models finished");
 }
 $("#runAll").onclick = runAll; $("#rerunAll").onclick = runAll;
@@ -492,7 +673,30 @@ function renderSummary(){
 function pretty(x){ try { return JSON.stringify(typeof x === "string" ? JSON.parse(x) : x, null, 2); } catch (e) { return String(x ?? ""); } }
 const at = d => d ? stamp(d) + " " + tz : "–";
 const setTxt = a => { const s = a.req.settings; return `${s.tempNote ? "temp not sent (model rejects it)" : "temp " + s.temperature} · max ${s.max_tokens}${s.seed !== null && s.seed !== undefined ? ` · seed ${s.seed}${s.seedNote ? " (not sent)" : ""}` : ""}`; };
-const reqText = a => `REQUEST · sent ${at(a.sentAt)}${a.turn ? ` · session ${a.sessionId}, turn ${a.turn} (${a.req.prompt.historyMessages} earlier messages included)` : ""}\n${a.req.method} ${a.req.url}\n${Object.entries(a.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(a.req.body)}`;
+/* The file's raw data is hundreds of KB of base64. Keep it out of anything shown,
+   copied or exported — leave a marker with the fingerprint so the evidence still
+   proves which file went. */
+function slimBody(body){
+  const marker = o => {
+    const att = attachment;
+    return `<${o.bytes ?? "?"} bytes of ${o.mime || "file"} omitted · ${o.name || ""} · sha256 ${(o.sha||"").slice(0,16)}…>`;
+  };
+  const walk = v => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") {
+      const out = {};
+      for (const [k, val] of Object.entries(v)) {
+        if (k === "data" && typeof val === "string" && val.length > 256) out[k] = `<base64 omitted, ${val.length} chars>`;
+        else if ((k === "url" || k === "file_data") && typeof val === "string" && val.startsWith("data:") && val.length > 256) out[k] = `<data: URL omitted, ${val.length} chars>`;
+        else out[k] = walk(val);
+      }
+      return out;
+    }
+    return v;
+  };
+  return walk(body);
+}
+const reqText = a => `REQUEST · sent ${at(a.sentAt)}${a.turn ? ` · session ${a.sessionId}, turn ${a.turn} (${a.req.prompt.historyMessages} earlier messages included)` : ""}\n${a.req.method} ${a.req.url}\n${Object.entries(a.req.shownHeaders).map(([k,v]) => k+": "+v).join("\n")}\n\n${pretty(slimBody(a.req.body))}`;
 const resText = a => a.state === "running" ? "RESPONSE · waiting…" :
   `RESPONSE · received ${at(a.gotAt)} · ${a.ms} ms · status ${a.status}${a.host ? " · answered by " + a.host : ""}${a.errType ? "\nError type: " + a.errType : ""}${a.error ? "\nError: " + a.error : ""}${a.flags?.length ? "\nFlags: " + a.flags.join(" | ") : ""}\n\n${a.raw ? pretty(a.raw) : "(no response body)"}`;
 const flagHtml = res => (res.flags||[]).map(f => `<span class="flag">⚠ ${esc(f)}</span>`).join("");
@@ -504,6 +708,9 @@ function transcript(res){
   return html;
 }
 
+const attLine = res => !res.att ? "" :
+  (res.att.sent ? `${/pdf/i.test(res.att.mime) ? "📄" : "🖼"} ${esc(res.att.name)} sent`
+                : `⊘ ${esc(res.att.name)} not sent · ${esc(res.att.reason||"")}`);
 function cardBody(res){
   if (res.tab === "answer" && mode === "convo" && res.turn) return transcript(res) + (res.state === "ok" ? flagHtml(res) : "");
   if (res.state === "running") return `<p class="empty">Waiting for the answer…</p>`;
@@ -539,6 +746,7 @@ function renderResults(){
         ${res.state==="ok" ? `<span class="stat">in ${res.tokIn??"–"} · out ${res.tokOut??"–"}${res.tokThink ? ` (thinking ${res.tokThink})` : ""} · ${res.words} words · finish: ${esc(res.finish||"–")}${res.host ? ` · via ${esc(res.host)}` : ""}</span>` : ""}
         <span class="stat empty" style="font-size:12px">${esc(setTxt(res))}</span>
         ${res.warn ? `<span class="stat run">⚠ ${esc(res.warn)}</span>` : ""}
+        ${res.att ? `<span class="stat ${res.att.sent ? "" : "run"}">${attLine(res)}</span>` : ""}
         ${hist.length > 1 ? `<span class="attempts">All attempts: ${hist.map(a => `#${a.attempt} ${a.state==="ok"?"✓":"✗"} ${esc(a.status)} ${a.ms}ms`).join(" · ")}</span>` : ""}</div>
       <div class="tabs" role="tablist">${["answer","request","response","info"].map(t => `<button type="button" role="tab" aria-selected="${res.tab===t}" data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join("")}</div>
       <div class="body">${cardBody(res)}</div>
@@ -574,6 +782,7 @@ function mdForResult(res){
     ...[["Run id", res.runId], ["Status", res.status], ["Error type", res.errType||"–"], ["Flags", (res.flags||[]).join("; ")||"–"], ["Time", res.ms!=null?res.ms+" ms":"–"], ["Sent", at(res.sentAt)], ["Received", at(res.gotAt)],
        ["Model asked", res.model], ["Model returned", res.modelReturned||"–"], ["Answered by (host)", res.host||"–"], ["Response id", res.id||"–"], ["Finish reason", res.finish||"–"],
        ["Settings", setTxt(res)], ["Earlier messages sent", res.req.prompt.historyMessages],
+       ["Attachment", res.att ? `${res.att.name} · ${res.att.mime} · ${res.att.bytes} bytes · sha256 ${res.att.sha256||"–"} · ${res.att.sent ? "SENT" : "NOT SENT ("+(res.att.reason||"")+")"}` : "none"],
        ["Tokens in / out / thinking / total", `${res.tokIn??"–"} / ${res.tokOut??"–"} / ${res.tokThink??"–"} / ${res.tokTotal??"–"}`], ["Words / characters", `${res.words??"–"} / ${res.chars??"–"}`]].map(([k,v]) => `| ${k} | ${String(v??"–").replace(/\|/g,"\\|")} |`),
     "", "**Message**", "", fence("text", res.userText || ""),
     "", "**Answer**", "", res.state==="ok" ? fence("text", res.text) : `Error: ${res.error}`,
@@ -626,7 +835,8 @@ function runJson(){
     attempts: calls().map(a => ({ runId:a.runId, sessionId:a.sessionId, turn:a.turn, modelNo:a.idx, provider:a.provider, model:a.model, answeredByHost:a.host||null, attempt:a.attempt, trial:a.trial,
       sentAt:iso(a.sentAt), receivedAt:iso(a.gotAt), latencyMs:a.ms ?? null, httpStatus:a.status ?? null, requestOk:a.state==="ok", errorType:a.errType||null, error:a.error||null, flags:a.flags||[],
       prompt:a.req.prompt, settings:a.req.settings,
-      request:{ method:a.req.method, url:a.req.url, headers:a.req.shownHeaders, body:a.req.body },
+      attachment:a.req.prompt.attachment || null,
+      request:{ method:a.req.method, url:a.req.url, headers:a.req.shownHeaders, body:slimBody(a.req.body) },
       response:{ body:a.json ?? a.raw ?? null },
       extracted: a.state==="ok" ? { text:a.text, finishReason:a.finish, responseId:a.id, modelReturned:a.modelReturned, tokensIn:a.tokIn, tokensOut:a.tokOut, tokensThinking:a.tokThink ?? null, tokensTotal:a.tokTotal, words:a.words, chars:a.chars } : null }))
   }, null, 2));
