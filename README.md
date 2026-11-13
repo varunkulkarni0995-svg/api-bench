@@ -21,6 +21,18 @@ A lightweight, single-file API testing tool that runs in the browser. Pick a pre
 | Knowledge | REST Countries, Wikipedia summary, Countries GraphQL | No |
 | Practice | JSONPlaceholder (GET / POST / PUT / DELETE), httpbin echo and error codes | No |
 
+## Web research (web.html)
+
+Tests the Fit Check Web researcher end to end: **search → read pages → summarize**.
+
+| Step | Tools | Notes |
+|---|---|---|
+| 1 Search | Serper (recommended), Firecrawl search, Tavily | Drops Amazon pages, results without the exact brand name, and anything older than the window. Undated results are checked on the page itself |
+| 2 Read pages | Firecrawl (recommended) with Jina Reader or WebScraping.AI as backup | Reddit, Amazon, YouTube and social sites are never opened; their snippets are used |
+| 3 Summarize | Groq, Gemini or OpenRouter with the Web researcher prompt (`webresearch_prompt.txt`) | Output is the JSON the Fit Check Decider expects |
+
+Export JSON or Markdown after a run to grade it. Keys are shared with Compare models and stay in your browser.
+
 ## Run it
 
 - Open `index.html` in Chrome, or
