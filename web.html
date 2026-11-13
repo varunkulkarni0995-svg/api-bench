@@ -238,7 +238,7 @@ async function runSearch(){
     if($("#noAmazon").checked && /(^|\.)amazon\./.test(it.site)) why="Amazon page";
     else if(own) why="brand's own site";
     else if(isListing(it.url)) why="shop listing, not reviews";
-    else if($("#brandMatch").checked && !words.some(w=>(" "+hay+" ").includes(" "+w+" ")||hay.replace(/ /g,"").includes(w.replace(/ /g,"")))) why="brand name not found";
+    else if($("#brandMatch").checked && !words.some(w=>(" "+hay+" ").includes(" "+w+" ")||it.url.toLowerCase().replace(/[^a-z0-9]/g,"").includes(w.replace(/ /g,"")))) why="brand name not found";
     else if(it.kind==="review_site" && !noRead(it.url)) why="";
     else if(d && d<cutoff) why="older than "+months+" months";
     else if(!d && $("#reqDate").checked) why=noRead(it.url)?"no date":"no date in snippet: page will be checked";
