@@ -102,7 +102,7 @@ td a{word-break:break-all}
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.2.1</span></h1></div>
+  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.2.2</span></h1></div>
   <div class="row"><button class="btn primary" id="runAll">Run all 3 steps</button><button class="btn" id="exportJson">Export JSON</button><button class="btn" id="exportMd">Export Markdown</button></div>
 </header>
 
@@ -230,15 +230,15 @@ async function runSearch(){
   $("#searchStat").textContent="Searching…"; const t0=performance.now(); const seen=new Set(); S.search=[];
   for(const q of qs){ for(const it of await searchOne(tool,q,n)){ if(!it.url||seen.has(it.url)) continue; seen.add(it.url); it.query=q; S.search.push(it); } }
   const cutoff=today(); cutoff.setMonth(cutoff.getMonth()-months);
-  const words=[brand,seller].filter(Boolean).map(w=>w.toLowerCase());
+  const words=[brand,seller].filter(Boolean).map(w=>w.toLowerCase().replace(/[^a-z0-9]+/g," ").trim());
   S.search.forEach(it=>{ const d=parseDate(it.dateRaw)||dateInText(it.snippet); it.date=iso(d); it.site=host(it.url);
-    const hay=(it.title+" "+it.snippet+" "+it.url).toLowerCase(); let why="";
+    const hay=(isReviewSite(it.url)?(it.title+" "+it.url):(it.title+" "+it.snippet+" "+it.url)).toLowerCase().replace(/[^a-z0-9]+/g," "); let why="";
     const own=$("#noOwn").checked && words.some(w=>w.replace(/[^a-z0-9]/g,"").length>3 && it.site.replace(/[^a-z0-9]/g,"").includes(w.replace(/[^a-z0-9]/g,"")) && !isReviewSite(it.url));
     it.kind=isReviewSite(it.url)?"review_site":"";
     if($("#noAmazon").checked && /(^|\.)amazon\./.test(it.site)) why="Amazon page";
     else if(own) why="brand's own site";
     else if(isListing(it.url)) why="shop listing, not reviews";
-    else if($("#brandMatch").checked && !words.some(w=>new RegExp("(^|[^a-z0-9])"+w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^a-z0-9])").test(hay))) why="brand name not found";
+    else if($("#brandMatch").checked && !words.some(w=>(" "+hay+" ").includes(" "+w+" ")||hay.replace(/ /g,"").includes(w.replace(/ /g,"")))) why="brand name not found";
     else if(it.kind==="review_site" && !noRead(it.url)) why="";
     else if(d && d<cutoff) why="older than "+months+" months";
     else if(!d && $("#reqDate").checked) why=noRead(it.url)?"no date":"no date in snippet: page will be checked";
