@@ -102,7 +102,7 @@ td a{word-break:break-all}
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.2</span></h1></div>
+  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.2.1</span></h1></div>
   <div class="row"><button class="btn primary" id="runAll">Run all 3 steps</button><button class="btn" id="exportJson">Export JSON</button><button class="btn" id="exportMd">Export Markdown</button></div>
 </header>
 
@@ -238,8 +238,8 @@ async function runSearch(){
     if($("#noAmazon").checked && /(^|\.)amazon\./.test(it.site)) why="Amazon page";
     else if(own) why="brand's own site";
     else if(isListing(it.url)) why="shop listing, not reviews";
-    else if(it.kind==="review_site" && !noRead(it.url)) why="";
     else if($("#brandMatch").checked && !words.some(w=>new RegExp("(^|[^a-z0-9])"+w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^a-z0-9])").test(hay))) why="brand name not found";
+    else if(it.kind==="review_site" && !noRead(it.url)) why="";
     else if(d && d<cutoff) why="older than "+months+" months";
     else if(!d && $("#reqDate").checked) why=noRead(it.url)?"no date":"no date in snippet: page will be checked";
     it.keep=!why; it.why=why; it.pending=/page will be checked/.test(why); it.read=(it.keep||it.pending) && !noRead(it.url); });
