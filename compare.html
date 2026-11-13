@@ -177,7 +177,7 @@ const stamp = d => { const p=(n,l=2)=>String(n).padStart(l,"0"); return `${d.get
 /* ---------- Providers ---------- */
 const PROVIDERS = {
   gemini:     { name:"Gemini", key:"gemini_key", keyLink:"https://aistudio.google.com/apikey", kind:"gemini", base:"https://generativelanguage.googleapis.com/v1beta", def:"gemini-3.5-flash-lite" },
-  groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"llama-3.3-70b-versatile" },
+  groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"openai/gpt-oss-120b" },
   openrouter: { name:"OpenRouter", key:"openrouter_key", keyLink:"https://openrouter.ai/keys", kind:"openai", base:"https://openrouter.ai/api/v1", def:"nvidia/nemotron-3-ultra-550b-a55b:free", listNoKey:true },
   hf:         { name:"Hugging Face", key:"hf_token", keyLink:"https://huggingface.co/settings/tokens", kind:"openai", base:"https://router.huggingface.co/v1", def:"", listNoKey:true },
   mistral:    { name:"Mistral", key:"mistral_key", keyLink:"https://console.mistral.ai/api-keys", kind:"openai", base:"https://api.mistral.ai/v1", def:"mistral-small-latest", seedKey:"random_seed" },
