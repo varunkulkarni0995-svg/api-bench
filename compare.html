@@ -95,7 +95,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a><h1>Compare models <span class="empty" style="font-size:12px;font-weight:400">v1.4.0</span></h1></div>
+  <div><a href="./">← API Bench</a><h1>Compare models <span class="empty" style="font-size:12px;font-weight:400">v1.4.1</span></h1></div>
   <span class="empty">Same prompt to several Gen AI models. Keys are saved only in this browser and go straight to each provider (no server in between). Copies and exports show placeholders such as &lt;groq_key&gt;, never the key.</span>
 </header>
 
@@ -177,8 +177,8 @@ const stamp = d => { const p=(n,l=2)=>String(n).padStart(l,"0"); return `${d.get
 /* ---------- Providers ---------- */
 const PROVIDERS = {
   gemini:     { name:"Gemini", key:"gemini_key", keyLink:"https://aistudio.google.com/apikey", kind:"gemini", base:"https://generativelanguage.googleapis.com/v1beta", def:"gemini-3.5-flash-lite" },
-  groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"" },
-  openrouter: { name:"OpenRouter", key:"openrouter_key", keyLink:"https://openrouter.ai/keys", kind:"openai", base:"https://openrouter.ai/api/v1", def:"", listNoKey:true },
+  groq:       { name:"Groq", key:"groq_key", keyLink:"https://console.groq.com/keys", kind:"openai", base:"https://api.groq.com/openai/v1", def:"llama-3.3-70b-versatile" },
+  openrouter: { name:"OpenRouter", key:"openrouter_key", keyLink:"https://openrouter.ai/keys", kind:"openai", base:"https://openrouter.ai/api/v1", def:"nvidia/nemotron-3-ultra-550b-a55b:free", listNoKey:true },
   hf:         { name:"Hugging Face", key:"hf_token", keyLink:"https://huggingface.co/settings/tokens", kind:"openai", base:"https://router.huggingface.co/v1", def:"", listNoKey:true },
   mistral:    { name:"Mistral", key:"mistral_key", keyLink:"https://console.mistral.ai/api-keys", kind:"openai", base:"https://api.mistral.ai/v1", def:"mistral-small-latest", seedKey:"random_seed" },
   cohere:     { name:"Cohere", key:"cohere_key", keyLink:"https://dashboard.cohere.com/api-keys", kind:"openai", base:"https://api.cohere.ai/compatibility/v1", def:"command-a-03-2025", listUrl:"https://api.cohere.com/v1/models?endpoint=chat" },
@@ -294,9 +294,9 @@ const label = r => `${r.provider === "custom" ? (r.customName || "Custom") : PRO
 
 /* ---------- Model rows ---------- */
 let rows = store.get("apibench.compare.rows", null) || [
-  { provider:"gemini", model:PROVIDERS.gemini.def }, { provider:"groq", model:"" }, { provider:"openrouter", model:"" }
+  { provider:"gemini", model:PROVIDERS.gemini.def }, { provider:"groq", model:PROVIDERS.groq.def }, { provider:"openrouter", model:PROVIDERS.openrouter.def }
 ];
-rows.forEach(r => { r.id = r.id || Math.random().toString(36).slice(2,9); });
+rows.forEach(r => { r.id = r.id || Math.random().toString(36).slice(2,9); if (!r.model && PROVIDERS[r.provider]?.def) r.model = PROVIDERS[r.provider].def; });
 const saveRows = () => store.set("apibench.compare.rows", rows.map(({id,provider,model,base,customName,capMode}) => ({id,provider,model,base,customName,capMode})));
 
 function renderModels(){
@@ -334,6 +334,8 @@ function renderModels(){
     pick.onchange = () => { if (pick.value) { r.model = modelIn.value = pick.value; saveRows(); } };
     const saved = savedList(r);
     if (saved?.ids?.length) showList(saved, false);
+    else if (r.provider !== "custom" && (hasKey || P.listNoKey)) { hint.textContent = "Loading models…"; listModels(r, true).then(L => { showList(L, true); drawCaps?.(); }).catch(e => { hint.textContent = "Couldn't load the list: " + e.message; }); }
+    if (!r.model) { modelIn.style.borderColor = "var(--bad, #c0322b)"; hint.textContent = (hint.textContent ? hint.textContent + " · " : "") + "Pick a model before running."; }
     el.querySelector("[data-load]").onclick = async () => {
       hint.textContent = "Loading models…";
       try { showList(await listModels(r, true), true); el.querySelector("[data-load]").textContent = "Refresh list"; drawCaps(); renderAtt(); }
@@ -358,7 +360,7 @@ function renderModels(){
   });
   renderAtt();
 }
-$("#addModel").onclick = () => { rows.push({ id:Math.random().toString(36).slice(2,9), provider:"groq", model:"" }); saveRows(); renderModels(); };
+$("#addModel").onclick = () => { rows.push({ id:Math.random().toString(36).slice(2,9), provider:"groq", model:PROVIDERS.groq.def }); saveRows(); renderModels(); };
 
 /* ---------- Attachment: read the file, show who gets it ---------- */
 const fmtBytes = n => n < 1024 ? n+" B" : n < 1048576 ? (n/1024).toFixed(0)+" KB" : (n/1048576).toFixed(2)+" MB";
@@ -604,6 +606,8 @@ const runnableRows = () => paidOk ? rows : rows.filter(r => !(PROVIDERS[r.provid
 async function runAll(){
   if (!$("#user").value.trim()) { toast("Write a user prompt first"); $("#user").focus(); return; }
   if (!rows.length) { toast("Add at least one model"); return; }
+  const noModel = rows.findIndex(r => !(r.model||"").trim());
+  if (noModel >= 0) { toast(`Model ${noModel+1} (${PROVIDERS[rows[noModel].provider]?.name||"row"}) has no model chosen. Pick one or remove the row.`); document.querySelectorAll("[data-model]")[noModel]?.focus(); return; }
   if (mode === "convo" && convo.turn) return sendNext();
   paidGate();
   const live = runnableRows();
