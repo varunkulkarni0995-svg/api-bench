@@ -102,7 +102,7 @@ td a{word-break:break-all}
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.1</span></h1></div>
+  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.2</span></h1></div>
   <div class="row"><button class="btn primary" id="runAll">Run all 3 steps</button><button class="btn" id="exportJson">Export JSON</button><button class="btn" id="exportMd">Export Markdown</button></div>
 </header>
 
@@ -118,7 +118,9 @@ td a{word-break:break-all}
     <textarea id="queries" rows="4">{brand} dress sizing reviews
 {brand} dress quality complaints
 {brand} fake OR counterfeit OR scam
-{seller} returns refund customer service</textarea></label>
+{seller} returns refund customer service
+{brand} reviews site:trustpilot.com OR site:bbb.org OR site:sitejabber.com</textarea></label>
+  <p class="empty" style="margin:0">Queries with <code>site:</code> skip the recent-results filter, because review-site pages are often older while the reviews on them are new.</p>
   <div class="row"><label><span><input type="checkbox" id="reqDate" checked> Keep only dated results</span></label><label><span><input type="checkbox" id="noAmazon" checked> Leave out Amazon pages</span></label><label><span><input type="checkbox" id="brandMatch" checked> Brand name must appear</span></label><label><span><input type="checkbox" id="recentOnly" checked> Ask the search engine for recent results only</span></label><label><span><input type="checkbox" id="noOwn" checked> Leave out the brand's own site</span></label></div>
 </section>
 
@@ -206,13 +208,14 @@ function dateInText(t){ const m=String(t||"").match(/\b(?:Jan|Feb|Mar|Apr|May|Ju
 const host=u=>{ try{ return new URL(u).hostname.replace(/^www\./,""); }catch(e){ return ""; } };
 const REVIEW_SITE=/(^|\.)(trustpilot\.com|bbb\.org|sitejabber\.com|reviews\.io|consumeraffairs\.com|pissedconsumer\.com|complaintsboard\.com)$/i;
 const isReviewSite=u=>REVIEW_SITE.test(host(u))||/walmart\.com\/reviews\//i.test(u);
+const isListing=u=>/(^|\.)(shein\.com|temu\.com|aliexpress\.com|ebay\.com|desertcart\.[a-z.]+|etsy\.com|target\.com|modash\.io)$/i.test(host(u))||/walmart\.com\/ip\//i.test(u);
 const noRead=u=>/(^|\.)(reddit\.com|redd\.it|amazon\.[a-z.]+|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com)$/i.test(host(u));
 
 /* ---------- 1. search ---------- */
 async function searchOne(tool,q,n){
-  if(tool==="serper"){ const r=await call("Search","Serper","https://google.serper.dev/search",{method:"POST",headers:{"X-API-KEY":secret("serper_key"),"Content-Type":"application/json"},body:JSON.stringify(Object.assign({q,num:n}, $("#recentOnly").checked?{tbs:"qdr:m"+(+$("#months").value||6)}:{}))},q);
+  if(tool==="serper"){ const r=await call("Search","Serper","https://google.serper.dev/search",{method:"POST",headers:{"X-API-KEY":secret("serper_key"),"Content-Type":"application/json"},body:JSON.stringify(Object.assign({q,num:n}, $("#recentOnly").checked&&!/site:/i.test(q)?{tbs:"qdr:m"+(+$("#months").value||6)}:{}))},q);
     return (r.json?.organic||[]).map(o=>({title:o.title,url:o.link,snippet:o.snippet||"",dateRaw:o.date||""})); }
-  if(tool==="firecrawl"){ const r=await call("Search","Firecrawl","https://api.firecrawl.dev/v1/search",{method:"POST",headers:{Authorization:"Bearer "+secret("firecrawl_key"),"Content-Type":"application/json"},body:JSON.stringify(Object.assign({query:q,limit:n}, $("#recentOnly").checked?{tbs:"qdr:m"+(+$("#months").value||6)}:{}))},q);
+  if(tool==="firecrawl"){ const r=await call("Search","Firecrawl","https://api.firecrawl.dev/v1/search",{method:"POST",headers:{Authorization:"Bearer "+secret("firecrawl_key"),"Content-Type":"application/json"},body:JSON.stringify(Object.assign({query:q,limit:n}, $("#recentOnly").checked&&!/site:/i.test(q)?{tbs:"qdr:m"+(+$("#months").value||6)}:{}))},q);
     return (r.json?.data||[]).map(o=>({title:o.title,url:o.url,snippet:o.description||"",dateRaw:o.publishedDate||""})); }
   const r=await call("Search","Tavily","https://api.tavily.com/search",{method:"POST",headers:{Authorization:"Bearer "+secret("tavily_key"),"Content-Type":"application/json"},body:JSON.stringify({query:q,max_results:n,search_depth:"basic"})},q);
   return (r.json?.results||[]).map(o=>({title:o.title,url:o.url,snippet:o.content||"",dateRaw:o.published_date||""})); }
@@ -234,6 +237,7 @@ async function runSearch(){
     it.kind=isReviewSite(it.url)?"review_site":"";
     if($("#noAmazon").checked && /(^|\.)amazon\./.test(it.site)) why="Amazon page";
     else if(own) why="brand's own site";
+    else if(isListing(it.url)) why="shop listing, not reviews";
     else if(it.kind==="review_site" && !noRead(it.url)) why="";
     else if($("#brandMatch").checked && !words.some(w=>new RegExp("(^|[^a-z0-9])"+w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^a-z0-9])").test(hay))) why="brand name not found";
     else if(d && d<cutoff) why="older than "+months+" months";
