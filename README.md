@@ -13,7 +13,7 @@ The four pages ship independently, so they have separate version numbers.
 | API tester (home) | `index.html` | v1.3.3 |
 | Compare models | `compare.html` | v1.5.0 |
 | Web research | `web.html` | v1.2.4 |
-| Vision eval | `vision.html` | v1.1.0 |
+| Vision eval | `vision.html` | v1.2.0 |
 | Device check | `device.html` | v1.0.0 |
 
 ## Layout

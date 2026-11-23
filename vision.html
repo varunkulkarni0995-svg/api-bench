@@ -127,7 +127,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 <div class="wrap">
 <header>
   <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a> · <a href="web.html">Web research</a> · <a href="device.html">Device check</a>
-  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.1.0</a></h1></div>
+  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.2.0</a></h1></div>
   <span class="empty">Same photo, same schema, every model. Scored against your own labels.</span>
 </header>
 
@@ -170,6 +170,9 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
     </label>
     <label>Temperature<input id="temp" type="number" min="0" max="2" step="0.1" value="0" style="width:110px"></label>
     <label>Max tokens<input id="maxTok" type="number" min="64" step="1" value="1024" style="width:130px"></label>
+    <label>Runs per photo
+      <select id="trials"><option value="1">1 — normal</option><option value="2">2 — also check stability</option></select>
+    </label>
   </div>
   <label>Prompt<textarea id="prompt" rows="12"></textarea></label>
   <label>JSON Schema<textarea id="schema" rows="10"></textarea></label>
@@ -554,23 +557,35 @@ function normalise(o){
 
 /* ---------- Run ---------- */
 let runs = [];
-const BANNED = /\b(merino|cashmere|gore[- ]?tex|polyester|nylon|\d{1,3}\s?%|nike|adidas|uniqlo|patagonia|zara|machine wash|dry clean)\b/i;
+// Claims a photo cannot establish on its own. Each is allowed ONLY when the model
+// cited it in visible_evidence — a legible label is a reading, not an invention.
+const UNSUPPORTABLE = [
+  /\b(merino|cashmere|gore[- ]?tex|polyester|nylon|acrylic|viscose|goose down|duck down)\b/i,
+  /\b\d{1,3}\s?%/,
+  /\b(machine wash|dry clean|tumble dry)\b/i,
+  /\b(waterproof|windproof|breathable|thermal[- ]lined|fleece[- ]lined|insulated)\b/i,
+  /\b(nike|adidas|uniqlo|patagonia|zara|levi'?s|north face|columbia|h&m|gap|arc'?teryx)\b/i
+];
 
 $("#runAll").onclick = async ()=>{
   const live = rows.filter(r=>r.model && keyOf(r) && canSeeImages(r.model));
   if (!live.length) return toast("No row has a model, a key and image support");
   if (!fixtures.length) return toast("Add at least one fixture");
   try { JSON.parse($("#schema").value); } catch(e){ return toast("Schema is not valid JSON"); }
+  const trials = Math.max(1, +$("#trials").value || 1);
   const paid = live.filter(r=>PROVIDERS[r.provider].paid).map(r=>PROVIDERS[r.provider].name);
-  if (paid.length && !confirm(`${live.length} model(s) × ${fixtures.length} fixtures = ${live.length*fixtures.length} calls.\nPaid: ${[...new Set(paid)].join(", ")}.\n\nRun?`)) return;
+  if (paid.length && !confirm(`${live.length} model(s) × ${fixtures.length} fixtures${trials>1?` × ${trials} runs`:""} = ${live.length*fixtures.length*trials} calls.\nPaid: ${[...new Set(paid)].join(", ")}.\n\nRun?`)) return;
 
   runs = []; $("#runAll").disabled = true;
-  let done = 0, total = live.length*fixtures.length;
+  let done = 0, total = live.length*fixtures.length*trials;
   for (const r of live){
     for (const f of fixtures){
-      $("#summary").innerHTML = `Running… ${++done} / ${total} <div class="bar"><i style="width:${Math.round(100*done/total)}%"></i></div>`;
-      runs.push(await runOne(r,f));
-      render();
+      for (let t=1; t<=trials; t++){
+        $("#summary").innerHTML = `Running… ${++done} / ${total} <div class="bar"><i style="width:${Math.round(100*done/total)}%"></i></div>`;
+        const one = await runOne(r,f); one.trial = t;
+        runs.push(one);
+        render();
+      }
     }
   }
   $("#runAll").disabled = false;
@@ -579,7 +594,7 @@ $("#runAll").onclick = async ()=>{
 
 async function runOne(r,f){
   const label = `${PROVIDERS[r.provider].name} · ${r.model}`;
-  const out = { model:label, provider:r.provider, modelId:r.model, fixture:f.name, truth:f.truth,
+  const out = { model:label, provider:r.provider, modelId:r.model, fixture:f.name, fixtureId:f.id, trial:1, truth:f.truth,
     enforcement:enforcementFor(r), ms:0, parse:null, reading:null, error:null, usage:null };
   const t0 = performance.now();
   try {
@@ -616,12 +631,55 @@ function scoreModel(rs){
   const spread = errs.length ? Math.max(...pos.map(r=>r.reading.garment.warmth))-Math.min(...pos.map(r=>r.reading.garment.warmth)) : 0;
   const flags = Object.fromEntries(FLAGS.map(f=>[f, pos.length? pos.filter(r=>asBool(f,r.reading.garment[f])===asBool(f,r.truth[f])).length/pos.length : null]));
   const abstained = neg.filter(r=>!r.reading || r.reading.usable===false).length;
-  const banned = parsed.filter(r=>{
-    const g=r.reading.garment, ev=(r.reading.visible_evidence||[]).join(" ");
-    const said=[g.name,g.warmth_basis,ev].join(" ");
-    if (!BANNED.test(said)) return false;
-    return !/label|tag/i.test(ev);          // a legible label is evidence, not invention
-  }).length;
+  // An unsupportable term counts against the model only when its own evidence does not back it.
+  const unsupported = [];
+  for (const r of parsed){
+    const g = r.reading.garment, evList = r.reading.visible_evidence || [];
+    const ev = evList.join(" ");
+    const claimed = [g.name, g.warmth_basis].join(" ");
+    const bad = [];
+    for (const re of UNSUPPORTABLE){
+      const m = claimed.match(re); if (!m) continue;
+      const term = m[0];
+      // backed if the model quoted the same term in its evidence, or said it read a label
+      const backed = new RegExp("\\b"+term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\b","i").test(ev)
+                  || /\b(label|tag|care instructions?|printed|embroidered|stitched)\b/i.test(ev);
+      if (!backed) bad.push(term);
+    }
+    if (bad.length) unsupported.push({ fixture:r.fixture, terms:[...new Set(bad)] });
+  }
+  const banned = unsupported.length;
+  // Does the image reach the model at all? If every labelled photo comes back with
+  // the same name, slot and warmth, the model is not looking at the picture.
+  let imageReaches = null, identicalAcross = null;
+  const firstTrial = pos.filter(r=>(r.trial||1)===1);
+  const distinctFx = new Set(firstTrial.map(r=>r.fixtureId||r.fixture));
+  if (distinctFx.size >= 2){
+    const sigs = new Set(firstTrial.map(r=>{
+      const g=r.reading.garment; return [String(g.name).trim().toLowerCase(), g.slot, g.warmth].join("|");
+    }));
+    identicalAcross = sigs.size === 1;
+    imageReaches = !identicalAcross;
+  }
+
+  // Stability: the same photo asked twice should come back the same at temperature 0.
+  let stability = null;
+  const byFx = {};
+  for (const r of rs){ if(!r.reading) continue; (byFx[r.fixtureId||r.fixture] ||= []).push(r); }
+  const repeated = Object.values(byFx).filter(a=>a.length>1);
+  if (repeated.length){
+    let slotFlips=0, maxDrift=0, pairs=0;
+    for (const a of repeated){
+      for (let i=1;i<a.length;i++){
+        pairs++;
+        const g0=a[0].reading.garment, gi=a[i].reading.garment;
+        if (g0.slot!==gi.slot) slotFlips++;
+        maxDrift = Math.max(maxDrift, Math.abs(g0.warmth-gi.warmth));
+      }
+    }
+    stability = { pairs, slotFlips, maxDrift, stable: slotFlips===0 && maxDrift<=1 };
+  }
+
   // uniform confidence: the model reporting one number for every field
   const uniform = parsed.filter(r=>{ const c=Object.values(r.reading.confidence); return new Set(c.map(x=>x.toFixed(2))).size===1; }).length;
 
@@ -644,7 +702,7 @@ function scoreModel(rs){
     errors: rs.filter(r=>r.error).length,
     slotAcc: pos.length?slotHits/pos.length:null, mae, spread, flags,
     abstainRate: neg.length?abstained/neg.length:null, leaked: neg.filter(r=>r.reading?.usable).map(r=>r.fixture),
-    banned, uniform, ece, buckets,
+    banned, unsupported, uniform, ece, buckets, imageReaches, identicalAcross, stability,
     msAvg: Math.round(rs.reduce((a,r)=>a+r.ms,0)/Math.max(1,rs.length)),
     tokens: rs.reduce((a,r)=>a+(r.usage?.totalTokenCount||r.usage?.total_tokens||((r.usage?.input_tokens||0)+(r.usage?.output_tokens||0))||0),0)
   };
@@ -661,11 +719,14 @@ function render(){
 
   $("#score").innerHTML = byModel.map(m=>{
     const s = scoreModel(runs.filter(r=>r.model===m));
-    const fails = [s.parseRate<1, s.abstainRate!==null&&s.abstainRate<1, s.banned>0, s.ece!==null&&s.ece>0.1].filter(Boolean).length;
+    const fails = [s.parseRate<1, s.abstainRate!==null&&s.abstainRate<1, s.banned>0,
+                   s.ece!==null&&s.ece>0.1, s.imageReaches===false,
+                   s.stability!==null&&!s.stability.stable].filter(Boolean).length;
     return `<div class="sc">
       <h3>${esc(m)}</h3>
       <div class="verdict ${fails===0?"ok":"bad"}">${fails===0?"pass":fails===1?"1 issue":fails+" issues"}</div>
       <table>
+        <tr><td>Photo reached the model</td><td class="num">${s.imageReaches===null?"—":s.imageReaches?"yes":"NO"}</td><td>${mark(s.imageReaches)}</td></tr>
         <tr><td>Returned usable JSON</td><td class="num">${pct(s.parseRate)}</td><td>${mark(s.parseRate===1)}</td></tr>
         <tr><td>…without repair</td><td class="num">${s.clean}/${s.n}</td><td></td></tr>
         <tr><td>Refused every negative</td><td class="num">${pct(s.abstainRate)}</td><td>${mark(s.abstainRate===null?null:s.abstainRate===1)}</td></tr>
@@ -676,11 +737,16 @@ function render(){
         <tr><td>Unobservable claims</td><td class="num">${s.banned}</td><td>${mark(s.banned===0)}</td></tr>
         <tr><td>Uniform confidence</td><td class="num">${s.uniform}/${s.parsed}</td><td>${mark(s.uniform===0)}</td></tr>
         <tr><td>Calibration error</td><td class="num">${s.ece==null?"—":s.ece.toFixed(3)}</td><td>${mark(s.ece==null?null:s.ece<=0.1)}</td></tr>
+        <tr><td>Same answer twice</td><td class="num">${s.stability===null?"—":(s.stability.slotFlips?`${s.stability.slotFlips} slot flip(s)`:`warmth \u00b1${s.stability.maxDrift}`)}</td><td>${mark(s.stability===null?null:s.stability.stable)}</td></tr>
         <tr><td>Avg latency</td><td class="num">${s.msAvg} ms</td><td></td></tr>
         <tr><td>Tokens</td><td class="num">${s.tokens||"—"}</td><td></td></tr>
         <tr><td>Call errors</td><td class="num">${s.errors}</td><td>${mark(s.errors===0)}</td></tr>
       </table>
       ${s.leaked.length?`<p class="empty"><b class="bad">Leaked:</b> ${s.leaked.map(esc).join(", ")}</p>`:""}
+      ${s.identicalAcross?`<p class="empty"><b class="bad">Identical answer for every photo.</b> The image is probably not reaching this model — check the request before trusting any score above.</p>`:""}
+      ${s.unsupported.length?(()=>{const seen=new Map();
+          s.unsupported.forEach(u=>{const k=u.fixture; seen.set(k,new Set([...(seen.get(k)||[]),...u.terms]));});
+          return `<p class="empty"><b class="bad">Claimed without evidence:</b> ${[...seen].map(([fx,ts])=>`${esc(fx)} — ${[...ts].map(esc).join(", ")}`).join(" · ")}</p>`;})():""}
     </div>`;
   }).join("");
 
