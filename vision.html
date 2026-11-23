@@ -127,7 +127,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 <div class="wrap">
 <header>
   <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a> · <a href="web.html">Web research</a> · <a href="device.html">Device check</a>
-  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.2.0</a></h1></div>
+  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.2.1</a></h1></div>
   <span class="empty">Same photo, same schema, every model. Scored against your own labels.</span>
 </header>
 
@@ -665,7 +665,7 @@ function scoreModel(rs){
   // Stability: the same photo asked twice should come back the same at temperature 0.
   let stability = null;
   const byFx = {};
-  for (const r of rs){ if(!r.reading) continue; (byFx[r.fixtureId||r.fixture] ||= []).push(r); }
+  for (const r of rs){ if(!r.reading || r.reading.usable===false) continue; (byFx[r.fixtureId||r.fixture] ||= []).push(r); }
   const repeated = Object.values(byFx).filter(a=>a.length>1);
   if (repeated.length){
     let slotFlips=0, maxDrift=0, pairs=0;
@@ -681,7 +681,8 @@ function scoreModel(rs){
   }
 
   // uniform confidence: the model reporting one number for every field
-  const uniform = parsed.filter(r=>{ const c=Object.values(r.reading.confidence); return new Set(c.map(x=>x.toFixed(2))).size===1; }).length;
+  const scored = parsed.filter(r=>r.reading.usable!==false);
+  const uniform = scored.filter(r=>{ const c=Object.values(r.reading.confidence||{}); return c.length && new Set(c.map(x=>Number(x).toFixed(2))).size===1; }).length;
 
   // calibration
   const pts=[];
@@ -702,7 +703,7 @@ function scoreModel(rs){
     errors: rs.filter(r=>r.error).length,
     slotAcc: pos.length?slotHits/pos.length:null, mae, spread, flags,
     abstainRate: neg.length?abstained/neg.length:null, leaked: neg.filter(r=>r.reading?.usable).map(r=>r.fixture),
-    banned, unsupported, uniform, ece, buckets, imageReaches, identicalAcross, stability,
+    banned, unsupported, uniform, scored:scored.length, ece, buckets, imageReaches, identicalAcross, stability,
     msAvg: Math.round(rs.reduce((a,r)=>a+r.ms,0)/Math.max(1,rs.length)),
     tokens: rs.reduce((a,r)=>a+(r.usage?.totalTokenCount||r.usage?.total_tokens||((r.usage?.input_tokens||0)+(r.usage?.output_tokens||0))||0),0)
   };
@@ -735,7 +736,7 @@ function render(){
         <tr><td>Warmth spread</td><td class="num">${s.spread}</td><td>${s.spread<=1?'<span class="bad">flat</span>':""}</td></tr>
         ${FLAGS.map(f=>`<tr><td>${f}</td><td class="num">${pct(s.flags[f])}</td><td>${mark(s.flags[f]===null?null:s.flags[f]>=0.85)}</td></tr>`).join("")}
         <tr><td>Unobservable claims</td><td class="num">${s.banned}</td><td>${mark(s.banned===0)}</td></tr>
-        <tr><td>Uniform confidence</td><td class="num">${s.uniform}/${s.parsed}</td><td>${mark(s.uniform===0)}</td></tr>
+        <tr><td>Uniform confidence</td><td class="num">${s.uniform}/${s.scored}</td><td>${mark(s.uniform===0)}</td></tr>
         <tr><td>Calibration error</td><td class="num">${s.ece==null?"—":s.ece.toFixed(3)}</td><td>${mark(s.ece==null?null:s.ece<=0.1)}</td></tr>
         <tr><td>Same answer twice</td><td class="num">${s.stability===null?"—":(s.stability.slotFlips?`${s.stability.slotFlips} slot flip(s)`:`warmth \u00b1${s.stability.maxDrift}`)}</td><td>${mark(s.stability===null?null:s.stability.stable)}</td></tr>
         <tr><td>Avg latency</td><td class="num">${s.msAvg} ms</td><td></td></tr>

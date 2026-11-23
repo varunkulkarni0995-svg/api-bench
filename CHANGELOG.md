@@ -11,7 +11,7 @@ numbers. There is no single "API Bench version".
 | API tester (home) | `index.html` | **v1.3.3** |
 | Compare models | `compare.html` | **v1.5.0** |
 | Web research | `web.html` | **v1.2.4** |
-| Vision eval | `vision.html` | **v1.2.0** |
+| Vision eval | `vision.html` | **v1.2.1** |
 | Device check | `device.html` | **v1.0.0** |
 
 How to read the numbers: **major.minor.patch** — a new way of working bumps the
@@ -68,7 +68,8 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.2.0** | Three evals added. **Photo reached the model** — if every photo comes back with the same name, slot and warmth, the image is not arriving and no other score means anything. **Same answer twice** — a Runs per photo setting repeats each fixture and reports slot flips and warmth drift. **Claimed without evidence** replaces the old banned-word list: a term like merino or waterproof counts against a model only when its own visible_evidence does not back it, so a brand genuinely printed on the garment is no longer a false positive |
+| **v1.2.1** | Refusals no longer counted as readings. When a model correctly refuses a photo, the garment and confidence fields it returns are placeholders, so comparing them across runs produced phantom slot flips and phantom uniform-confidence failures. Both checks now look only at photos the model accepted |
+| v1.2.0 | Three evals added. **Photo reached the model** — if every photo comes back with the same name, slot and warmth, the image is not arriving and no other score means anything. **Same answer twice** — a Runs per photo setting repeats each fixture and reports slot flips and warmth drift. **Claimed without evidence** replaces the old banned-word list: a term like merino or waterproof counts against a model only when its own visible_evidence does not back it, so a brand genuinely printed on the garment is no longer a false positive |
 | v1.1.0 | Take photo — shoot a garment with the device camera and it becomes a fixture, ready to run against every model |
 | v1.0.2 | Link to Device check added |
 | v1.0.1 | Version number links here |
