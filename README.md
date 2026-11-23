@@ -2,6 +2,19 @@
 
 A lightweight, single-file API testing tool that runs in the browser. Pick a pre-configured API or add your own, fill a friendly input form, send the request, and read the result in plain language next to the raw JSON.
 
+## Versions
+
+Each page shows its own version in small text next to its title — click it to open
+[CHANGELOG.md](CHANGELOG.md), which lists what changed in every version of every page.
+The four pages ship independently, so they have separate version numbers.
+
+| Page | File | Version |
+|---|---|---|
+| API tester (home) | `index.html` | v1.3.2 |
+| Compare models | `compare.html` | v1.4.2 |
+| Web research | `web.html` | v1.2.3 |
+| Vision eval | `vision.html` | v1.0.1 |
+
 ## Layout
 
 | Pane | What it does |
