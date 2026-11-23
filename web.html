@@ -65,6 +65,9 @@ th{color:var(--muted);font-weight:600}
 td.num{font-family:var(--font-mono)}
 .log{font:12px/1.6 var(--font-mono);max-height:560px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
 .empty{color:var(--muted);font-size:14px}
+.ver{font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
+.ver:hover{color:var(--ink);border-color:var(--muted)}
+
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 .msg{margin:0 0 10px;white-space:pre-wrap;font-size:14px;line-height:1.5}
@@ -102,7 +105,7 @@ td a{word-break:break-all}
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a><h1>Web research <span class="empty" style="font-size:12px;font-weight:400">v1.2.2</span></h1></div>
+  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a> · <a href="vision.html">Vision eval</a><h1>Web research <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.2.3</a></h1></div>
   <div class="row"><button class="btn primary" id="runAll">Run all 3 steps</button><button class="btn" id="exportJson">Export JSON</button><button class="btn" id="exportMd">Export Markdown</button></div>
 </header>
 

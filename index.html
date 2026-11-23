@@ -71,6 +71,10 @@ textarea{font-family:var(--font-mono);font-size:12.5px;resize:vertical;min-heigh
 .left{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .brand{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px}
 .brand b{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.brand{flex-wrap:wrap;row-gap:4px}
+.ver{font-size:11px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:1px 7px;white-space:nowrap}
+.ver:hover{color:var(--ink);border-color:var(--muted)}
+
 .left .add{margin:0 12px 8px}
 .list{flex:1;overflow:auto;padding:0 8px 16px}
 .group-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:12px 8px 3px;font-weight:600}
@@ -199,7 +203,7 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
 
   <!-- LEFT: API list -->
   <aside class="left">
-    <div class="brand"><b>API Bench</b> <a href="compare.html" style="font-size:12px;font-weight:600;margin-left:8px">Compare models →</a> <a href="web.html" style="font-size:12px;font-weight:600;margin-left:8px">Web research →</a></div>
+    <div class="brand"><b>API Bench</b> <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.3.2</a> <a href="compare.html" style="font-size:12px;font-weight:600;margin-left:8px">Compare models →</a> <a href="web.html" style="font-size:12px;font-weight:600;margin-left:8px">Web research →</a> <a href="vision.html" style="font-size:12px;font-weight:600;margin-left:8px">Vision eval →</a></div>
     <button type="button" class="btn add" id="addBtn">+ Add API</button>
     <nav class="list" id="apiList" aria-label="APIs"></nav>
   </aside>
