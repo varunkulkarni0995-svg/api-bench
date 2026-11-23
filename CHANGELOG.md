@@ -8,10 +8,11 @@ numbers. There is no single "API Bench version".
 
 | Page | File | Version |
 |---|---|---|
-| API tester (home) | `index.html` | **v1.3.2** |
-| Compare models | `compare.html` | **v1.4.2** |
-| Web research | `web.html` | **v1.2.3** |
-| Vision eval | `vision.html` | **v1.0.1** |
+| API tester (home) | `index.html` | **v1.3.3** |
+| Compare models | `compare.html` | **v1.4.3** |
+| Web research | `web.html` | **v1.2.4** |
+| Vision eval | `vision.html` | **v1.0.2** |
+| Device check | `device.html` | **v1.0.0** |
 
 How to read the numbers: **major.minor.patch** — a new way of working bumps the
 minor, a fix or a small adjustment bumps the patch.
@@ -25,7 +26,8 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.3.2** | Version number now shown on the page, next to the API Bench name in the sidebar |
+| **v1.3.3** | Link to Device check added |
+| v1.3.2 | Version number now shown on the page, next to the API Bench name in the sidebar |
 | v1.3.1 | Link to Vision eval added |
 | v1.3.0 | Photon place search and reverse lookup added |
 | v1.2.0 | Copy buttons for inputs, request, curl, response, result and all |
@@ -36,7 +38,8 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.4.2** | Groq default model is now `openai/gpt-oss-120b` (llama-3.3 was retired by Groq); links to Web research and Vision eval added |
+| **v1.4.3** | Link to Device check added |
+| v1.4.2 | Groq default model is now `openai/gpt-oss-120b` (llama-3.3 was retired by Groq); links to Web research and Vision eval added |
 | v1.4.1 | Rows start with a model, model lists load automatically, Run is blocked with a clear message when a row has no model |
 | v1.4.0 | Image and PDF attachments, capability detection, section swap |
 | v1.3.4 | Full model list in a dropdown, lists saved in the browser, non-chat Groq models hidden |
@@ -52,7 +55,8 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.2.3** | Link to Vision eval added |
+| **v1.2.4** | Link to Device check added |
+| v1.2.3 | Link to Vision eval added |
 | v1.2.2 | On review sites the brand must appear in the page title or the link, not anywhere on the page |
 | v1.2.1 | Review-site pages must still name the brand |
 | v1.2.0 | Review-site queries run without the date filter; shop listings dropped (Walmart item pages, Shein, Temu, eBay) |
@@ -63,5 +67,12 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.0.1** | Version number links here |
+| **v1.0.2** | Link to Device check added |
+| v1.0.1 | Version number links here |
 | v1.0.0 | First release — one fixed JSON shape enforced across every model, scored against your own labels. Enforcement selector (auto / schema / JSON mode / prompt only), negative fixtures, calibration error, warmth spread, uniform-confidence and unobservable-claim checks, model disagreement table, CSV / Markdown / JSON export |
+
+## Device check — `device.html`
+
+| Version | What changed |
+|---|---|
+| **v1.0.0** | First release — camera (lens selection, stream resolution, capture, resize to the size actually sent to a model) and EXIF inspection on library photos: whether GPS was present and whether the resize removed it, plus the orientation tag. Passkey section: platform authenticator detection, create and verify, user-verification flags. Markdown report. Everything runs on the device; nothing is sent anywhere |

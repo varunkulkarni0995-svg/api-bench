@@ -10,10 +10,11 @@ The four pages ship independently, so they have separate version numbers.
 
 | Page | File | Version |
 |---|---|---|
-| API tester (home) | `index.html` | v1.3.2 |
-| Compare models | `compare.html` | v1.4.2 |
-| Web research | `web.html` | v1.2.3 |
-| Vision eval | `vision.html` | v1.0.1 |
+| API tester (home) | `index.html` | v1.3.3 |
+| Compare models | `compare.html` | v1.4.3 |
+| Web research | `web.html` | v1.2.4 |
+| Vision eval | `vision.html` | v1.0.2 |
+| Device check | `device.html` | v1.0.0 |
 
 ## Layout
 
@@ -80,6 +81,20 @@ It also shows **where models disagree** on the same photo — different slot, or
 2 apart. Those are the photos worth looking at yourself.
 
 Export CSV, Markdown or JSON. Keys are shared with Compare models and stay in your browser.
+
+## Device check (device.html)
+
+What the phone or laptop in your hand actually gives a web app. Nothing leaves the device; there are no keys and no network calls.
+
+| Section | What it answers |
+|---|---|
+| **Camera** | Which lens you get when you ask for the back one, what resolution the stream hands over, and how big the photo is before and after the resize that gets sent to a model |
+| **Camera — library photo** | Whether a photo already on the device carries EXIF, whether that includes **GPS**, and whether the resize removes it. Also flags an orientation tag, which a plain canvas redraw ignores — that is how a photo reaches a model rotated |
+| **Auth — passkeys** | Whether there is a built-in authenticator (Touch ID, Windows Hello, Android screen lock), how long create and verify take, and whether the device actually did a biometric check or just confirmed someone was there |
+
+The passkey test is local: the challenge is random and no server verifies the signature, so it answers whether the hardware and the prompt work here, not whether a login is secure.
+
+Location, motion sensors, clipboard, notifications, storage quota and network type come next.
 
 ## Run it
 
