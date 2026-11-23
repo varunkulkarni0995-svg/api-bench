@@ -65,6 +65,13 @@ th{color:var(--muted);font-weight:600}
 td.num{font-family:var(--font-mono)}
 .log{font:12px/1.6 var(--font-mono);max-height:560px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
 .empty{color:var(--muted);font-size:14px}
+.cam[hidden]{display:none}
+.cam{display:grid;grid-template-columns:minmax(220px,340px) 1fr;gap:14px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--sunk)}
+.camstage{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#000;aspect-ratio:3/4}
+.camstage video{width:100%;height:100%;object-fit:cover;display:block}
+.camside{display:flex;flex-direction:column;gap:10px}
+@media (max-width:620px){.cam{grid-template-columns:1fr}}
+
 .ver{font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
 .ver:hover{color:var(--ink);border-color:var(--muted)}
 
@@ -120,7 +127,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 <div class="wrap">
 <header>
   <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a> · <a href="web.html">Web research</a> · <a href="device.html">Device check</a>
-  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.0.2</a></h1></div>
+  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.1.0</a></h1></div>
   <span class="empty">Same photo, same schema, every model. Scored against your own labels.</span>
 </header>
 
@@ -178,8 +185,24 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
   <h2 id="p3"><span class="n">3</span>Fixtures</h2>
   <div class="row">
     <label class="grow">Add photos<input type="file" id="fxFiles" accept="image/png,image/jpeg,image/webp" multiple></label>
+    <button type="button" class="btn small" id="camOpen">📷 Take photo</button>
     <button type="button" class="btn small" id="fxClear">Remove all</button>
     <span class="empty" id="fxCount"></span>
+  </div>
+  <div class="cam" id="cam" hidden>
+    <div class="camstage"><video id="camVid" playsinline muted></video></div>
+    <div class="camside">
+      <label>Lens<select id="camLens">
+        <option value="environment">Back camera</option>
+        <option value="user">Front camera</option>
+        <option value="any">Whatever the browser picks</option>
+      </select></label>
+      <div class="row" style="gap:8px">
+        <button type="button" class="btn primary" id="camShoot">Capture</button>
+        <button type="button" class="btn small" id="camClose">Close</button>
+      </div>
+      <p class="empty" id="camInfo" style="margin:0;font-size:12.5px">Shoot a garment, then press Run eval. The photo is resized in the browser and the metadata, GPS included, is dropped before anything is sent.</p>
+    </div>
   </div>
   <p class="empty" style="margin:0">
     Label each photo yourself — that label is the truth everything is scored against.
@@ -387,6 +410,57 @@ $("#fxFiles").onchange = async e=>{
   }
   e.target.value=""; saveFx(); renderFx();
 };
+/* ---------- Camera ---------- */
+let camStream = null;
+async function camStart(){
+  const lens = $("#camLens").value;
+  const video = { width:{ideal:2560}, height:{ideal:2560} };
+  if (lens !== "any") video.facingMode = { ideal: lens };
+  camStop();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video, audio:false });
+  } catch (err) {
+    const why = err.name === "NotAllowedError" ? "The browser blocked the camera. Allow it for this site and try again."
+              : err.name === "NotFoundError"   ? "No camera found on this device."
+              : err.name === "NotReadableError"? "Another app is using the camera."
+              : !window.isSecureContext        ? "The camera only works over https."
+              : err.message;
+    $("#camInfo").textContent = why;
+    return false;
+  }
+  const v = $("#camVid"); v.srcObject = camStream; v.muted = true;
+  await v.play().catch(()=>{});
+  const st = camStream.getVideoTracks()[0].getSettings();
+  $("#camInfo").textContent = `${st.width} × ${st.height}${st.facingMode ? " · "+st.facingMode : ""} — shoot a garment, then press Run eval.`;
+  return true;
+}
+function camStop(){ camStream?.getTracks().forEach(t=>t.stop()); camStream=null; const v=$("#camVid"); if(v) v.srcObject=null; }
+
+$("#camOpen").onclick = async ()=>{
+  const box = $("#cam");
+  if (!box.hidden) { camStop(); box.hidden = true; return; }
+  if (!navigator.mediaDevices?.getUserMedia) return toast("This browser has no camera access");
+  box.hidden = false;
+  if (!await camStart()) return;
+};
+$("#camLens").onchange = ()=>{ if(!$("#cam").hidden) camStart(); };
+$("#camClose").onclick = ()=>{ camStop(); $("#cam").hidden = true; };
+$("#camShoot").onclick = async ()=>{
+  if (!camStream) return;
+  const v = $("#camVid");
+  const c = document.createElement("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v,0,0);
+  const blob = await new Promise(r=>c.toBlob(r,"image/jpeg",0.92));
+  const dataUrl = await shrink(blob);
+  const n = fixtures.filter(f=>/^shot /.test(f.name)).length + 1;
+  fixtures.push({ id:"fx"+Math.random().toString(36).slice(2,8), name:"shot "+n, dataUrl,
+    truth:{slot:"outer",warmth:5,wind:0.2,water:0.2,dressy:4} });
+  saveFx(); renderFx();
+  toast(`Captured — ${fixtures.length} fixture(s). Set its labels below, then Run eval.`);
+};
+window.addEventListener("pagehide", camStop);
+
 async function shrink(file, maxEdge=768, q=0.8){
   const bmp = await createImageBitmap(file);
   const s = Math.min(1, maxEdge/Math.max(bmp.width,bmp.height));

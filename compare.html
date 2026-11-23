@@ -65,6 +65,13 @@ th{color:var(--muted);font-weight:600}
 td.num{font-family:var(--font-mono)}
 .log{font:12px/1.6 var(--font-mono);max-height:560px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
 .empty{color:var(--muted);font-size:14px}
+.cam[hidden]{display:none}
+.cam{display:grid;grid-template-columns:minmax(200px,300px) 1fr;gap:14px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--sunk);margin-top:8px}
+.camstage{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#000;aspect-ratio:3/4}
+.camstage video{width:100%;height:100%;object-fit:cover;display:block}
+.camside{display:flex;flex-direction:column;gap:10px}
+@media (max-width:620px){.cam{grid-template-columns:1fr}}
+
 .ver{font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
 .ver:hover{color:var(--ink);border-color:var(--muted)}
 
@@ -98,7 +105,7 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
 <body>
 <div class="wrap">
 <header>
-  <div><a href="./">← API Bench</a> · <a href="web.html">Web research</a> · <a href="vision.html">Vision eval</a> · <a href="device.html">Device check</a><h1>Compare models <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.4.3</a></h1></div>
+  <div><a href="./">← API Bench</a> · <a href="web.html">Web research</a> · <a href="vision.html">Vision eval</a> · <a href="device.html">Device check</a><h1>Compare models <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.5.0</a></h1></div>
   <span class="empty">Same prompt to several Gen AI models. Keys are saved only in this browser and go straight to each provider (no server in between). Copies and exports show placeholders such as &lt;groq_key&gt;, never the key.</span>
 </header>
 
@@ -119,7 +126,23 @@ dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing
   <label><span id="userLbl">User prompt</span><textarea id="user" rows="4" placeholder="e.g. Explain UPI in 3 lines."></textarea></label>
   <label style="display:block">Attachment (image or PDF) — sent with the prompt to every model that accepts it
     <span class="row" style="margin-top:6px"><input type="file" id="attFile" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" style="max-width:100%">
+    <button type="button" class="btn small" id="camOpen">📷 Take photo</button>
     <button type="button" class="btn small" id="attClear" hidden>Remove</button></span>
+    <div class="cam" id="cam" hidden>
+      <div class="camstage"><video id="camVid" playsinline muted></video></div>
+      <div class="camside">
+        <label>Lens<select id="camLens">
+          <option value="environment">Back camera</option>
+          <option value="user">Front camera</option>
+          <option value="any">Whatever the browser picks</option>
+        </select></label>
+        <div class="row" style="gap:8px">
+          <button type="button" class="btn primary" id="camShoot">Capture</button>
+          <button type="button" class="btn small" id="camClose">Close</button>
+        </div>
+        <p class="empty" id="camInfo" style="margin:0;font-size:12.5px">The photo is resized in the browser and its metadata, GPS included, is dropped before it goes anywhere.</p>
+      </div>
+    </div>
   </label>
   <div id="attBox" hidden></div>
   <div class="row">
@@ -412,6 +435,64 @@ $("#attFile").onchange = async e => {
   toast(`${isPdf ? "PDF" : "Image"} ready — ${rows.filter(r => takesAtt(r)).length} of ${rows.length} models can take it`);
 };
 $("#attClear").onclick = () => { attachment = null; $("#attFile").value = ""; renderAtt(); };
+/* ---------- Camera ---------- */
+let camStream = null;
+async function camStart(){
+  const lens = $("#camLens").value;
+  const video = { width:{ideal:2560}, height:{ideal:2560} };
+  if (lens !== "any") video.facingMode = { ideal: lens };
+  camStop();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video, audio:false });
+  } catch (err) {
+    $("#camInfo").textContent =
+        err.name === "NotAllowedError" ? "The browser blocked the camera. Allow it for this site and try again."
+      : err.name === "NotFoundError"   ? "No camera found on this device."
+      : err.name === "NotReadableError"? "Another app is using the camera."
+      : !window.isSecureContext        ? "The camera only works over https."
+      : err.message;
+    return false;
+  }
+  const v = $("#camVid"); v.srcObject = camStream; v.muted = true;
+  await v.play().catch(()=>{});
+  const st = camStream.getVideoTracks()[0].getSettings();
+  $("#camInfo").textContent = `${st.width} × ${st.height}${st.facingMode ? " · "+st.facingMode : ""} — capture, then Run.`;
+  return true;
+}
+function camStop(){ camStream?.getTracks().forEach(t=>t.stop()); camStream=null; const v=$("#camVid"); if(v) v.srcObject=null; }
+
+$("#camOpen").onclick = async ()=>{
+  const box = $("#cam");
+  if (!box.hidden) { camStop(); box.hidden = true; return; }
+  if (!navigator.mediaDevices?.getUserMedia) return toast("This browser has no camera access");
+  box.hidden = false;
+  await camStart();
+};
+$("#camLens").onchange = ()=>{ if(!$("#cam").hidden) camStart(); };
+$("#camClose").onclick = ()=>{ camStop(); $("#cam").hidden = true; };
+$("#camShoot").onclick = async ()=>{
+  if (!camStream) return;
+  const v = $("#camVid");
+  const full = document.createElement("canvas");
+  full.width = v.videoWidth; full.height = v.videoHeight;
+  full.getContext("2d").drawImage(v,0,0);
+  // resize so the payload stays under what providers accept
+  const maxEdge = 1280, sc = Math.min(1, maxEdge/Math.max(full.width, full.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(full.width*sc); c.height = Math.round(full.height*sc);
+  c.getContext("2d").drawImage(full,0,0,c.width,c.height);
+  const blob = await new Promise(r=>c.toBlob(r,"image/jpeg",0.85));
+  const buf = await blob.arrayBuffer();
+  attachment = { name:`photo-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.jpg`,
+                 mime:"image/jpeg", bytes:blob.size, isPdf:false,
+                 b64:bufToB64(buf), sha:await sha256Hex(buf) };
+  $("#attFile").value = "";
+  camStop(); $("#cam").hidden = true;
+  renderAtt();
+  toast(`Photo ready (${c.width} × ${c.height}, ${fmtBytes(blob.size)}) — ${rows.filter(r => takesAtt(r)).length} of ${rows.length} models can take it`);
+};
+window.addEventListener("pagehide", camStop);
+
 // what went with a given call, recorded on the result
 const attMetaFor = r => !attachment ? null : {
   name:attachment.name, mime:attachment.mime, bytes:attachment.bytes,

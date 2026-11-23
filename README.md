@@ -11,9 +11,9 @@ The four pages ship independently, so they have separate version numbers.
 | Page | File | Version |
 |---|---|---|
 | API tester (home) | `index.html` | v1.3.3 |
-| Compare models | `compare.html` | v1.4.3 |
+| Compare models | `compare.html` | v1.5.0 |
 | Web research | `web.html` | v1.2.4 |
-| Vision eval | `vision.html` | v1.0.2 |
+| Vision eval | `vision.html` | v1.1.0 |
 | Device check | `device.html` | v1.0.0 |
 
 ## Layout
@@ -56,7 +56,7 @@ scores the answers against labels you set yourself.
 |---|---|
 | 1 Models | Pick any vision-capable models. Rows that can't see images are flagged and skipped |
 | 2 Task | A prompt and a JSON Schema. Ships with the Layer Up garment reading; edit either |
-| 3 Fixtures | Drop photos, label each one. Mark photos with **no garment** as negatives |
+| 3 Fixtures | Drop photos **or shoot one with the camera**, label each. Mark photos with **no garment** as negatives |
 | 4 Run | Every model × every fixture, one call each |
 
 **Enforcement is the experiment.** "Auto" uses each provider's strongest mechanism — a response

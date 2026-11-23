@@ -9,9 +9,9 @@ numbers. There is no single "API Bench version".
 | Page | File | Version |
 |---|---|---|
 | API tester (home) | `index.html` | **v1.3.3** |
-| Compare models | `compare.html` | **v1.4.3** |
+| Compare models | `compare.html` | **v1.5.0** |
 | Web research | `web.html` | **v1.2.4** |
-| Vision eval | `vision.html` | **v1.0.2** |
+| Vision eval | `vision.html` | **v1.1.0** |
 | Device check | `device.html` | **v1.0.0** |
 
 How to read the numbers: **major.minor.patch** — a new way of working bumps the
@@ -38,7 +38,8 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.4.3** | Link to Device check added |
+| **v1.5.0** | Take photo — capture an image with the device camera instead of uploading a file; resized to 1280px and stripped of metadata in the browser before it is sent |
+| v1.4.3 | Link to Device check added |
 | v1.4.2 | Groq default model is now `openai/gpt-oss-120b` (llama-3.3 was retired by Groq); links to Web research and Vision eval added |
 | v1.4.1 | Rows start with a model, model lists load automatically, Run is blocked with a clear message when a row has no model |
 | v1.4.0 | Image and PDF attachments, capability detection, section swap |
@@ -67,7 +68,8 @@ reconstructed here from the commit history.
 
 | Version | What changed |
 |---|---|
-| **v1.0.2** | Link to Device check added |
+| **v1.1.0** | Take photo — shoot a garment with the device camera and it becomes a fixture, ready to run against every model |
+| v1.0.2 | Link to Device check added |
 | v1.0.1 | Version number links here |
 | v1.0.0 | First release — one fixed JSON shape enforced across every model, scored against your own labels. Enforcement selector (auto / schema / JSON mode / prompt only), negative fixtures, calibration error, warmth spread, uniform-confidence and unobservable-claim checks, model disagreement table, CSV / Markdown / JSON export |
 
