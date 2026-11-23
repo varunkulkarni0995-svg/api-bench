@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Device check · API Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#eef1f4;--panel:#fff;--sunk:#f5f7f9;--ink:#17212b;--muted:#5a6775;--line:#d9dee4;
+  --accent:#0f766e;--accent-ink:#fff;--accent-soft:#e3f2f0;--ok:#18794e;--warn:#a16207;--bad:#b91c1c;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#0f151b;--panel:#161f28;--sunk:#111920;--ink:#e4eaf0;--muted:#94a2b0;--line:#283440;--accent:#2dd4bf;--accent-ink:#06201d;--accent-soft:#12332f;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-ui)}
+a{color:var(--accent)}
+.wrap{max-width:1400px;margin:0 auto;padding:16px 24px 64px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+header h1{margin:0;font-size:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;gap:10px;align-items:center}
+.panel h2 .n{background:var(--ink);color:var(--panel);border-radius:6px;padding:0 7px;letter-spacing:0}
+label{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:4px}
+input,select,textarea{font:14px/1.4 var(--font-ui);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-height:36px}
+textarea{font-family:var(--font-mono);font-size:13px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.grow{flex:1 1 260px}
+.btn{font:600 14px/1 var(--font-ui);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:9px 14px;min-height:36px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:6px 10px;min-height:30px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.models{display:flex;flex-direction:column;gap:8px}
+.mrow{display:grid;grid-template-columns:28px 150px minmax(200px,1.4fr) minmax(180px,1fr) 32px;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk)}
+.mrow .idx{font:600 13px var(--font-mono);color:var(--muted);text-align:center}
+.mrow .custom{grid-column:2 / 5;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mrow .hint{grid-column:2 / 5;font-size:12px;color:var(--muted)}
+.mrow .caps{grid-column:2 / 5}
+.keyok{color:var(--ok)}.keybad{color:var(--bad)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--panel);color:var(--ink);font:600 13px var(--font-ui);padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.summary{font-size:14px;padding:10px 12px;background:var(--accent-soft);border-radius:8px}
+.cards{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.card{flex:0 0 380px;border:1px solid var(--line);border-radius:10px;background:var(--panel);display:flex;flex-direction:column;max-height:720px}
+.card .head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.card .title{font-weight:700;font-size:14px;word-break:break-all}
+.card .stat{font:13px var(--font-mono);color:var(--muted)}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}.run{color:var(--warn);font-weight:700}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:transparent;color:var(--muted);font:600 12px var(--font-ui);padding:8px 4px;cursor:pointer;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.body{padding:12px 14px;overflow:auto;flex:1;min-height:160px}
+.answer{white-space:pre-wrap;font-size:14px;line-height:1.55}
+pre{margin:0;font:12px/1.5 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:4px 10px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+.card .foot{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+td.num{font-family:var(--font-mono)}
+.log{font:12px/1.6 var(--font-mono);max-height:560px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
+.empty{color:var(--muted);font-size:14px}
+.ver{font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
+.ver:hover{color:var(--ink);border-color:var(--muted)}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.msg{margin:0 0 10px;white-space:pre-wrap;font-size:14px;line-height:1.5}
+.msg b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.flag{display:block;font-size:12px;font-weight:600;color:var(--warn)}
+.log details{border-bottom:1px solid var(--line);padding:4px 0}
+.log summary{cursor:pointer}
+.log details pre{margin:6px 0 8px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.log .lrun{padding:4px 0;border-bottom:1px solid var(--line)}
+.etype{font-size:12px;font-weight:600}
+.attempts{font-size:12px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:10px;padding:16px;width:min(760px,92vw)}
+dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing:border-box}
+.caps{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px}
+.cap{border:1px solid var(--line);border-radius:999px;padding:1px 7px;font-size:11px;line-height:1.6;white-space:nowrap}
+.cap.yes{border-color:#2d7a4a;color:#2d7a4a}
+.cap.no{color:var(--muted)}
+.cap.src{border:0;color:var(--muted);padding:1px 2px}
+.att{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);display:flex;gap:12px;align-items:flex-start;margin-top:4px}
+.att .thumb{width:72px;height:52px;border:1px solid var(--line);border-radius:6px;object-fit:contain;background:#fff;flex:0 0 auto}
+.att .pdfic{width:72px;height:52px;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto}
+.att .meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.att .nm{font-weight:600;word-break:break-all}
+.warnline{color:#8a5a00}
+@media (max-width:760px){.wrap{padding:12px}.mrow{grid-template-columns:24px minmax(0,1fr) 36px}.mrow>*{min-width:0}.mrow [data-del]{grid-row:1;grid-column:3}.mrow>*:nth-child(3),.mrow>*:nth-child(4),.mrow .custom,.mrow .hint,.mrow .caps{grid-column:2 / 4}.card{flex-basis:300px}}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:start}
+.stage{border:1px solid var(--line);border-radius:10px;background:var(--sunk);overflow:hidden;position:relative;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center}
+.stage video,.stage img{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+.stage .ph{color:var(--muted);font-size:13px;padding:20px;text-align:center}
+.res{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13px;align-content:start}
+.res .k{color:var(--muted)}
+.res .v{font-family:var(--font-mono);word-break:break-word}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:600;border:1px solid var(--line);white-space:nowrap}
+.pill.yes{color:var(--ok);border-color:currentColor}
+.pill.no{color:var(--bad);border-color:currentColor}
+.pill.wait{color:var(--warn);border-color:currentColor}
+.note{font-size:13px;color:var(--muted);margin:0}
+.banner{border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:10px 12px;font-size:13.5px;background:var(--sunk)}
+.banner.bad{border-left-color:var(--bad)}
+.soon{opacity:.55}
+.soon h2{cursor:default}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a> · <a href="web.html">Web research</a> · <a href="vision.html">Vision eval</a>
+  <h1>Device check <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.0.0</a></h1></div>
+  <span class="empty">What this phone or laptop actually gives a web app. Nothing leaves the device.</span>
+</header>
+
+<div id="ctxWarn"></div>
+
+<section class="panel" aria-labelledby="p1">
+  <h2 id="p1"><span class="n">1</span>Camera</h2>
+  <p class="note">
+    Two separate things get tested here, and they fail for different reasons.
+    <b>Live capture</b> is the camera itself — which lens you get, what resolution it hands over.
+    <b>Library photo</b> is the file path — a photo already on the device carries EXIF metadata,
+    including GPS, and that is the one worth watching.
+  </p>
+
+  <div class="row">
+    <label class="grow">Lens
+      <select id="camFacing">
+        <option value="environment">Back (environment)</option>
+        <option value="user">Front (user)</option>
+        <option value="any">Whatever the browser picks</option>
+      </select>
+    </label>
+    <label class="grow">Specific camera <select id="camDevice"><option value="">— ask after permission —</option></select></label>
+    <label>Resize longest edge to<input id="maxEdge" type="number" min="128" max="4096" step="1" value="768" style="width:120px"></label>
+    <label>JPEG quality<input id="jpegQ" type="number" min="0.1" max="1" step="0.05" value="0.8" style="width:110px"></label>
+  </div>
+
+  <div class="row">
+    <button type="button" class="btn primary" id="camStart">Start camera</button>
+    <button type="button" class="btn" id="camShoot" disabled>Capture</button>
+    <button type="button" class="btn" id="camStop" disabled>Stop</button>
+    <label class="grow">…or pick a photo from the library<input type="file" id="camFile" accept="image/*"></label>
+  </div>
+
+  <div class="dgrid">
+    <div class="stage" id="camStage"><span class="ph">No camera running.<br>Start it, or pick a photo.</span></div>
+    <div class="stage" id="outStage"><span class="ph">The resized image Layer Up would send appears here.</span></div>
+    <div class="res" id="camRes"><span class="k">Status</span><span class="v">not run</span></div>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="p2">
+  <h2 id="p2"><span class="n">2</span>Auth — passkeys</h2>
+  <p class="note">
+    Creates a passkey against this site and immediately asks for it back. Entirely local:
+    the challenge is random, nothing is sent anywhere, and no server checks the signature —
+    so this answers “will the hardware and the prompt work here”, not “is this login secure”.
+  </p>
+  <div class="row">
+    <button type="button" class="btn primary" id="authProbe">Check support</button>
+    <button type="button" class="btn" id="authCreate" disabled>Create passkey</button>
+    <button type="button" class="btn" id="authGet" disabled>Verify it</button>
+    <label class="grow">Require biometric / PIN
+      <select id="authUV"><option value="preferred">Preferred</option><option value="required">Required</option><option value="discouraged">Discouraged</option></select>
+    </label>
+  </div>
+  <div class="res" id="authRes"><span class="k">Status</span><span class="v">not run</span></div>
+</section>
+
+<section class="panel soon" aria-labelledby="p3">
+  <h2 id="p3"><span class="n">3</span>Next</h2>
+  <p class="note">Location · motion sensors · clipboard · notifications · storage quota · network type. Same shape: one button, one result table.</p>
+</section>
+
+<section class="panel" aria-labelledby="p4">
+  <div class="toolbar">
+    <h2 id="p4"><span class="n">4</span>Report</h2>
+    <div class="row">
+      <button type="button" class="btn small" id="dlMd">Download .md</button>
+      <button type="button" class="btn small" id="copyMd">Copy</button>
+    </div>
+  </div>
+  <div id="env" class="res"></div>
+</section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const $ = s => document.querySelector(s);
+const el = (t,a={},kids=[]) => { const n=document.createElement(t); for(const k in a){ if(k==='class')n.className=a[k]; else if(k==='html')n.innerHTML=a[k]; else n.setAttribute(k,a[k]); } for(const c of [].concat(kids)) n.append(c); return n; };
+const fmtB = b => b<1024 ? b+' B' : b<1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(2)+' MB';
+const ms = n => Math.round(n)+' ms';
+let toastT;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2200); }
+
+const REPORT = { camera:{}, auth:{}, env:{} };
+
+function putRes(target, rows){
+  const n = $(target); n.innerHTML='';
+  for (const [k,v] of rows){
+    n.append(el('span',{class:'k'},k));
+    const cell = el('span',{class:'v'});
+    if (v instanceof Node) cell.append(v); else cell.innerHTML = v;
+    n.append(cell);
+  }
+}
+const pill = (txt, kind) => `<span class="pill ${kind}">${txt}</span>`;
+
+/* ---------- secure context ---------- */
+(function ctx(){
+  const w = $('#ctxWarn');
+  if (window.isSecureContext) return;
+  w.append(el('div',{class:'banner bad',html:
+    '<b>Not a secure context.</b> This page was opened from a file or over plain http, so the browser '+
+    'blocks the camera and passkeys outright — both sections below will fail no matter what the device supports. '+
+    'Open it over https (the GitHub Pages address) and run it again.'}));
+})();
+
+/* ---------- environment ---------- */
+(function env(){
+  const nav = navigator;
+  const e = {
+    'User agent': nav.userAgent,
+    'Platform': nav.userAgentData?.platform || nav.platform || '—',
+    'Screen': `${screen.width} × ${screen.height} @ ${window.devicePixelRatio}x`,
+    'Viewport': `${innerWidth} × ${innerHeight}`,
+    'Touch points': nav.maxTouchPoints ?? 0,
+    'Secure context': window.isSecureContext ? pill('yes','yes') : pill('no','no'),
+    'Origin': location.origin || '(none — opened as a file)'
+  };
+  REPORT.env = { ...e, 'Secure context': String(window.isSecureContext) };
+  putRes('#env', Object.entries(e));
+})();
+
+/* ================= CAMERA ================= */
+let stream = null, lastShot = null;
+
+function stageVideo(){
+  const s = $('#camStage'); s.innerHTML='';
+  const v = el('video',{playsinline:'',muted:'',autoplay:''}); v.muted=true;
+  s.append(v); return v;
+}
+function stageImg(sel, url){
+  const s = $(sel); s.innerHTML='';
+  s.append(el('img',{src:url,alt:''}));
+}
+
+$('#camStart').onclick = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) return putRes('#camRes',[['Status',pill('getUserMedia not available','no')]]);
+  const facing = $('#camFacing').value, devId = $('#camDevice').value;
+  const video = { width:{ideal:4096}, height:{ideal:4096} };
+  if (devId) video.deviceId = { exact: devId };
+  else if (facing !== 'any') video.facingMode = { ideal: facing };
+
+  putRes('#camRes', [['Status', pill('asking for permission…','wait')]]);
+  const t0 = performance.now();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video, audio:false });
+  } catch (err) {
+    const why = err.name === 'NotAllowedError' ? 'You (or the browser) refused the camera.'
+              : err.name === 'NotFoundError'  ? 'No camera matching that request.'
+              : err.name === 'NotReadableError' ? 'The camera is in use by another app.'
+              : err.name === 'OverconstrainedError' ? 'That exact camera or lens is not available.'
+              : err.message;
+    REPORT.camera = { started:false, error: err.name+': '+why };
+    return putRes('#camRes', [['Status', pill('failed','no')], ['Error', `${err.name} — ${why}`]]);
+  }
+  const open = performance.now() - t0;
+  const v = stageVideo(); v.srcObject = stream;
+  await v.play().catch(()=>{});
+  const track = stream.getVideoTracks()[0];
+  const st = track.getSettings();
+
+  // now that permission is granted, labels become readable
+  await listCams();
+
+  const rows = [
+    ['Status', pill('live','yes')],
+    ['Time to open', ms(open)],
+    ['Camera', track.label || '(unnamed)'],
+    ['Lens reported', st.facingMode || '— not reported (normal on laptops) —'],
+    ['Asked for', facing==='any' ? 'no preference' : facing],
+    ['Stream size', `${st.width} × ${st.height}`],
+    ['Frame rate', st.frameRate ? st.frameRate.toFixed(0)+' fps' : '—']
+  ];
+  REPORT.camera = { started:true, openMs:Math.round(open), label:track.label, facing:st.facingMode||null,
+                    asked:facing, streamW:st.width, streamH:st.height, fps:st.frameRate||null };
+  putRes('#camRes', rows);
+  $('#camShoot').disabled = false; $('#camStop').disabled = false;
+};
+
+async function listCams(){
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const cams = all.filter(d => d.kind === 'videoinput');
+    const sel = $('#camDevice'); const keep = sel.value;
+    sel.innerHTML = '<option value="">— let the lens setting decide —</option>';
+    cams.forEach((c,i) => sel.append(el('option',{value:c.deviceId}, c.label || `Camera ${i+1} (name hidden until permission)`)));
+    sel.value = keep;
+    return cams;
+  } catch { return []; }
+}
+listCams();
+
+$('#camStop').onclick = () => {
+  stream?.getTracks().forEach(t=>t.stop()); stream=null;
+  $('#camStage').innerHTML = '<span class="ph">Camera stopped.</span>';
+  $('#camShoot').disabled = true; $('#camStop').disabled = true;
+};
+
+$('#camShoot').onclick = async () => {
+  if (!stream) return;
+  const v = $('#camStage video');
+  const t0 = performance.now();
+  const c = el('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const full = await new Promise(r => c.toBlob(r,'image/jpeg',0.95));
+  const grab = performance.now() - t0;
+  stageImg('#camStage', URL.createObjectURL(full));
+  stream.getTracks().forEach(t=>t.stop()); stream=null;
+  $('#camShoot').disabled = true; $('#camStop').disabled = true;
+  await reportImage(full, { source:'live capture', grabMs:grab, w:c.width, h:c.height });
+};
+
+$('#camFile').onchange = async e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  stageImg('#camStage', URL.createObjectURL(f));
+  await reportImage(f, { source:'library photo', name:f.name });
+};
+
+/* ---- EXIF: find the APP1 Exif segment and read orientation + GPS presence ---- */
+async function exifScan(blob){
+  const buf = new DataView(await blob.slice(0, Math.min(blob.size, 256*1024)).arrayBuffer());
+  if (buf.byteLength < 4 || buf.getUint16(0) !== 0xFFD8) return { jpeg:false };
+  let off = 2;
+  while (off + 4 < buf.byteLength) {
+    if (buf.getUint8(off) !== 0xFF) break;
+    const marker = buf.getUint8(off+1), size = buf.getUint16(off+2);
+    if (marker === 0xE1) {
+      let s = '';
+      for (let i=0;i<4 && off+4+i<buf.byteLength;i++) s += String.fromCharCode(buf.getUint8(off+4+i));
+      if (s === 'Exif') return parseExif(buf, off+10, size);
+    }
+    if (marker === 0xDA) break;           // start of scan — metadata is done
+    off += 2 + size;
+  }
+  return { jpeg:true, exif:false };
+}
+function parseExif(buf, tiff, segSize){
+  try {
+    const le = buf.getUint16(tiff) === 0x4949;
+    const u16 = o => buf.getUint16(o, le), u32 = o => buf.getUint32(o, le);
+    const ifd0 = tiff + u32(tiff+4);
+    let orientation = null, gps = false, make = null, model = null, dt = null;
+    const n = u16(ifd0);
+    for (let i=0;i<n;i++){
+      const e = ifd0 + 2 + i*12, tag = u16(e);
+      if (tag === 0x0112) orientation = u16(e+8);
+      if (tag === 0x8825) gps = true;
+      if (tag === 0x010F) make = 'present';
+      if (tag === 0x0110) model = 'present';
+      if (tag === 0x0132) dt = 'present';
+    }
+    return { jpeg:true, exif:true, bytes:segSize, orientation, gps, make, model, dt };
+  } catch { return { jpeg:true, exif:true, unreadable:true }; }
+}
+const ORIENT = {1:'1 — upright',2:'2 — mirrored',3:'3 — upside down',4:'4 — flipped',5:'5 — rotated',6:'6 — rotate 90° CW needed',7:'7 — rotated',8:'8 — rotate 90° CCW needed'};
+
+async function reportImage(blob, meta){
+  const t0 = performance.now();
+  const before = await exifScan(blob);
+  const bmp = await createImageBitmap(blob);
+  const maxEdge = Math.max(128, +$('#maxEdge').value || 768);
+  const q = Math.min(1, Math.max(.1, +$('#jpegQ').value || .8));
+  const scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width*scale), h = Math.round(bmp.height*scale);
+  const c = el('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').drawImage(bmp,0,0,w,h);
+  const out = await new Promise(r => c.toBlob(r,'image/jpeg',q));
+  const took = performance.now() - t0;
+  const after = await exifScan(out);
+  stageImg('#outStage', URL.createObjectURL(out));
+  lastShot = out;
+
+  const gpsCell = before.gps
+      ? pill('GPS in the original → '+(after.gps?'STILL THERE':'gone after resize'), after.gps?'no':'yes')
+      : before.exif ? pill('no GPS in this photo','yes') : pill('no EXIF at all','yes');
+
+  const rows = [
+    ['Source', meta.source],
+    meta.name ? ['File', meta.name] : null,
+    ['Original', `${bmp.width} × ${bmp.height} · ${fmtB(blob.size)}`],
+    ['Sent to the model', `${w} × ${h} · ${fmtB(out.size)}`],
+    ['Size change', !blob.size ? '—'
+        : out.size <= blob.size ? (100 - out.size/blob.size*100).toFixed(1)+'% smaller'
+        : (out.size/blob.size*100 - 100).toFixed(1)+'% larger (already smaller than the resize target)'],
+    ['Base64 payload', fmtB(Math.ceil(out.size/3)*4)],
+    ['Resize time', ms(took)],
+    meta.grabMs ? ['Capture time', ms(meta.grabMs)] : null,
+    ['EXIF before', before.exif ? `yes · ${fmtB(before.bytes||0)}` : (before.jpeg?'none':'not a JPEG')],
+    ['EXIF after', after.exif ? pill('still present','no') : pill('stripped','yes')],
+    ['Location data', gpsCell],
+    ['Orientation tag', before.orientation ? ORIENT[before.orientation] || before.orientation : '—'],
+    ['Camera make/model', before.make||before.model ? 'in the original, dropped on resize' : '—']
+  ].filter(Boolean);
+  putRes('#camRes', rows);
+
+  REPORT.camera = { ...REPORT.camera, ...meta,
+    originalW:bmp.width, originalH:bmp.height, originalBytes:blob.size,
+    outW:w, outH:h, outBytes:out.size, resizeMs:Math.round(took),
+    exifBefore:before, exifAfter:after };
+
+  if (before.orientation && before.orientation !== 1)
+    putRes('#camRes', rows.concat([['Watch out',
+      `This photo carries orientation ${before.orientation}. A plain canvas redraw ignores that tag, so the resized copy can reach the model rotated. Compare the two pictures above.`]]));
+}
+
+/* ================= AUTH ================= */
+let credId = null;
+const rand = n => crypto.getRandomValues(new Uint8Array(n));
+const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+
+$('#authProbe').onclick = async () => {
+  const rows = [];
+  const has = !!window.PublicKeyCredential;
+  rows.push(['WebAuthn', has ? pill('supported','yes') : pill('not supported','no')]);
+  if (!has) { REPORT.auth={supported:false}; return putRes('#authRes', rows); }
+  let plat=false, cond=false;
+  try { plat = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch {}
+  try { cond = await PublicKeyCredential.isConditionalMediationAvailable?.() ?? false; } catch {}
+  rows.push(['Built-in authenticator', plat ? pill('available (Touch ID, Windows Hello, Android screen lock)','yes') : pill('none — a security key would be needed','no')]);
+  rows.push(['Autofill sign-in', cond ? pill('supported','yes') : pill('not supported','no')]);
+  rows.push(['Relying party', location.hostname || '(none)']);
+  REPORT.auth = { supported:true, platformAuthenticator:plat, conditionalMediation:cond, rp:location.hostname };
+  putRes('#authRes', rows);
+  $('#authCreate').disabled = !window.isSecureContext;
+};
+
+$('#authCreate').onclick = async () => {
+  putRes('#authRes', [['Status', pill('waiting for the device prompt…','wait')]]);
+  const t0 = performance.now();
+  try {
+    const cred = await navigator.credentials.create({ publicKey:{
+      challenge: rand(32),
+      rp: { name:'API Bench device check' },
+      user: { id: rand(16), name:'device-check@apibench', displayName:'Device check' },
+      pubKeyCredParams: [{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection: { residentKey:'preferred', userVerification: $('#authUV').value },
+      timeout: 60000, attestation:'none'
+    }});
+    const took = performance.now() - t0;
+    credId = cred.rawId;
+    const r = cred.response;
+    const transports = r.getTransports?.() || [];
+    const alg = r.getPublicKeyAlgorithm?.();
+    REPORT.auth = { ...REPORT.auth, created:true, createMs:Math.round(took),
+                    attachment:cred.authenticatorAttachment, transports, alg };
+    putRes('#authRes', [
+      ['Status', pill('passkey created','yes')],
+      ['Time taken', ms(took)],
+      ['Stored on', cred.authenticatorAttachment === 'platform' ? 'this device (built in)' : cred.authenticatorAttachment || '—'],
+      ['Transports', transports.join(', ') || '—'],
+      ['Key type', alg === -7 ? 'ES256 (elliptic curve)' : alg === -257 ? 'RS256 (RSA)' : String(alg ?? '—')],
+      ['Credential id', b64(cred.rawId).slice(0,24)+'…'],
+      ['Next', 'Press Verify it — the device should ask again, and recognise this key.']
+    ]);
+    $('#authGet').disabled = false;
+  } catch (err) {
+    REPORT.auth = { ...REPORT.auth, created:false, error:err.name+': '+err.message };
+    putRes('#authRes', [['Status', pill('failed','no')], ['Error', `${err.name} — ${err.message}`],
+      ['Likely cause', err.name==='NotAllowedError' ? 'The prompt was dismissed, or it timed out.' :
+                       err.name==='InvalidStateError' ? 'A passkey for this site already exists on the device.' :
+                       err.name==='SecurityError' ? 'The page is not on a valid https origin.' : '—']]);
+  }
+};
+
+$('#authGet').onclick = async () => {
+  putRes('#authRes', [['Status', pill('waiting for the device prompt…','wait')]]);
+  const t0 = performance.now();
+  try {
+    const a = await navigator.credentials.get({ publicKey:{
+      challenge: rand(32),
+      allowCredentials: credId ? [{ id:credId, type:'public-key' }] : [],
+      userVerification: $('#authUV').value, timeout:60000
+    }});
+    const took = performance.now() - t0;
+    const flags = new DataView(a.response.authenticatorData).getUint8(32);
+    REPORT.auth = { ...REPORT.auth, verified:true, verifyMs:Math.round(took),
+                    userPresent:!!(flags&1), userVerified:!!(flags&4) };
+    putRes('#authRes', [
+      ['Status', pill('passkey returned a signature','yes')],
+      ['Time taken', ms(took)],
+      ['User present', (flags & 1) ? pill('yes','yes') : pill('no','no')],
+      ['User verified', (flags & 4) ? pill('yes — biometric or PIN','yes') : pill('no — presence only','wait')],
+      ['Signature', b64(a.response.signature).slice(0,24)+'…'],
+      ['Note', 'Nothing checked this signature. A real login verifies it on a server against the stored public key.']
+    ]);
+  } catch (err) {
+    REPORT.auth = { ...REPORT.auth, verified:false, error:err.name+': '+err.message };
+    putRes('#authRes', [['Status', pill('failed','no')], ['Error', `${err.name} — ${err.message}`]]);
+  }
+};
+
+/* ================= REPORT ================= */
+function toMd(){
+  const L = ['# Device check', '', '_'+new Date().toISOString()+'_', '', '## Environment', ''];
+  for (const [k,v] of Object.entries(REPORT.env)) L.push(`- **${k}:** ${v}`);
+  const dump = (title, obj) => {
+    L.push('', '## '+title, '');
+    if (!Object.keys(obj).length) { L.push('_not run_'); return; }
+    L.push('```json', JSON.stringify(obj,null,2), '```');
+  };
+  dump('Camera', REPORT.camera);
+  dump('Auth — passkeys', REPORT.auth);
+  return L.join('\n');
+}
+$('#dlMd').onclick = () => {
+  const a = el('a',{href:URL.createObjectURL(new Blob([toMd()],{type:'text/markdown'})),download:'device-check.md'});
+  document.body.append(a); a.click(); a.remove(); toast('Downloaded');
+};
+$('#copyMd').onclick = async () => { try { await navigator.clipboard.writeText(toMd()); toast('Copied'); } catch { toast('Copy blocked by the browser'); } };
+
+</script>
+</body>
+</html>

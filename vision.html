@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vision eval · API Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#eef1f4;--panel:#fff;--sunk:#f5f7f9;--ink:#17212b;--muted:#5a6775;--line:#d9dee4;
+  --accent:#0f766e;--accent-ink:#fff;--accent-soft:#e3f2f0;--ok:#18794e;--warn:#a16207;--bad:#b91c1c;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#0f151b;--panel:#161f28;--sunk:#111920;--ink:#e4eaf0;--muted:#94a2b0;--line:#283440;--accent:#2dd4bf;--accent-ink:#06201d;--accent-soft:#12332f;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-ui)}
+a{color:var(--accent)}
+.wrap{max-width:1400px;margin:0 auto;padding:16px 24px 64px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+header h1{margin:0;font-size:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;gap:10px;align-items:center}
+.panel h2 .n{background:var(--ink);color:var(--panel);border-radius:6px;padding:0 7px;letter-spacing:0}
+label{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:4px}
+input,select,textarea{font:14px/1.4 var(--font-ui);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-height:36px}
+textarea{font-family:var(--font-mono);font-size:13px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.grow{flex:1 1 260px}
+.btn{font:600 14px/1 var(--font-ui);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:9px 14px;min-height:36px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:6px 10px;min-height:30px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.models{display:flex;flex-direction:column;gap:8px}
+.mrow{display:grid;grid-template-columns:28px 150px minmax(200px,1.4fr) minmax(180px,1fr) 32px;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk)}
+.mrow .idx{font:600 13px var(--font-mono);color:var(--muted);text-align:center}
+.mrow .custom{grid-column:2 / 5;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mrow .hint{grid-column:2 / 5;font-size:12px;color:var(--muted)}
+.mrow .caps{grid-column:2 / 5}
+.keyok{color:var(--ok)}.keybad{color:var(--bad)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--panel);color:var(--ink);font:600 13px var(--font-ui);padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.summary{font-size:14px;padding:10px 12px;background:var(--accent-soft);border-radius:8px}
+.cards{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.card{flex:0 0 380px;border:1px solid var(--line);border-radius:10px;background:var(--panel);display:flex;flex-direction:column;max-height:720px}
+.card .head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.card .title{font-weight:700;font-size:14px;word-break:break-all}
+.card .stat{font:13px var(--font-mono);color:var(--muted)}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}.run{color:var(--warn);font-weight:700}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:transparent;color:var(--muted);font:600 12px var(--font-ui);padding:8px 4px;cursor:pointer;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.body{padding:12px 14px;overflow:auto;flex:1;min-height:160px}
+.answer{white-space:pre-wrap;font-size:14px;line-height:1.55}
+pre{margin:0;font:12px/1.5 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:4px 10px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+.card .foot{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+td.num{font-family:var(--font-mono)}
+.log{font:12px/1.6 var(--font-mono);max-height:560px;overflow:auto;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px}
+.empty{color:var(--muted);font-size:14px}
+.ver{font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
+.ver:hover{color:var(--ink);border-color:var(--muted)}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.msg{margin:0 0 10px;white-space:pre-wrap;font-size:14px;line-height:1.5}
+.msg b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.flag{display:block;font-size:12px;font-weight:600;color:var(--warn)}
+.log details{border-bottom:1px solid var(--line);padding:4px 0}
+.log summary{cursor:pointer}
+.log details pre{margin:6px 0 8px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.log .lrun{padding:4px 0;border-bottom:1px solid var(--line)}
+.etype{font-size:12px;font-weight:600}
+.attempts{font-size:12px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:10px;padding:16px;width:min(760px,92vw)}
+dialog textarea{width:100%;height:50vh;font:12px/1.5 var(--font-mono);box-sizing:border-box}
+.caps{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px}
+.cap{border:1px solid var(--line);border-radius:999px;padding:1px 7px;font-size:11px;line-height:1.6;white-space:nowrap}
+.cap.yes{border-color:#2d7a4a;color:#2d7a4a}
+.cap.no{color:var(--muted)}
+.cap.src{border:0;color:var(--muted);padding:1px 2px}
+.att{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);display:flex;gap:12px;align-items:flex-start;margin-top:4px}
+.att .thumb{width:72px;height:52px;border:1px solid var(--line);border-radius:6px;object-fit:contain;background:#fff;flex:0 0 auto}
+.att .pdfic{width:72px;height:52px;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto}
+.att .meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.att .nm{font-weight:600;word-break:break-all}
+.warnline{color:#8a5a00}
+@media (max-width:760px){.wrap{padding:12px}.mrow{grid-template-columns:24px minmax(0,1fr) 36px}.mrow>*{min-width:0}.mrow [data-del]{grid-row:1;grid-column:3}.mrow>*:nth-child(3),.mrow>*:nth-child(4),.mrow .custom,.mrow .hint,.mrow .caps{grid-column:2 / 4}.card{flex-basis:300px}}
+</style>
+
+<style>
+.fx{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.fxc{border:1px solid var(--line);border-radius:8px;background:var(--sunk);padding:8px;display:flex;flex-direction:column;gap:6px}
+.fxc img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:#fff}
+.fxc .nm{font:600 12px var(--font-mono);word-break:break-all;color:var(--muted)}
+.fxc .lab{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.fxc select,.fxc input{min-height:30px;padding:4px 6px;font-size:12px}
+.fxc label{font-size:11px;gap:2px}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.sc{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:12px 14px}
+.sc h3{margin:0 0 8px;font-size:14px;word-break:break-all}
+.sc .verdict{font-size:20px;font-weight:800}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:var(--accent)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:11px;margin:0 4px 4px 0}
+.pill.on{border-color:var(--accent);color:var(--accent)}
+.disagree td{font-size:12px}
+.mono{font-family:var(--font-mono);font-size:12px}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><a href="./">← API Bench</a> · <a href="compare.html">Compare models</a> · <a href="web.html">Web research</a> · <a href="device.html">Device check</a>
+  <h1>Vision eval <a href="https://github.com/varunkulkarni0995-svg/api-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="ver" title="What changed in this version">v1.0.2</a></h1></div>
+  <span class="empty">Same photo, same schema, every model. Scored against your own labels.</span>
+</header>
+
+<section class="panel" aria-labelledby="p0">
+  <h2 id="p0"><span class="n">0</span>What this is</h2>
+  <p class="empty" style="margin:0">
+    Compare models asks each model a question and shows you the prose. This page does the harder thing:
+    it forces every model to answer in <b>one fixed JSON shape</b>, then scores the answers against labels
+    you set yourself. Use it to pick a model and settle a prompt before wiring either into a product.
+  </p>
+</section>
+
+<section class="panel" aria-labelledby="p1">
+  <h2 id="p1"><span class="n">1</span>Models</h2>
+  <div class="models" id="models"></div>
+  <div class="row">
+    <button type="button" class="btn" id="addModel">+ Add model</button>
+    <button type="button" class="btn" id="presetVision">Load vision-capable preset</button>
+    <button type="button" class="btn primary" id="runAll">▶ Run eval</button>
+    <span class="empty" id="runHint"></span>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="p2">
+  <h2 id="p2"><span class="n">2</span>Task and schema</h2>
+  <div class="row">
+    <label class="grow">Preset
+      <select id="preset">
+        <option value="garment">Garment reading (Layer Up)</option>
+        <option value="custom">Custom schema</option>
+      </select>
+    </label>
+    <label>Output enforcement
+      <select id="enforce">
+        <option value="auto">Auto — strongest each provider supports</option>
+        <option value="schema">Schema only</option>
+        <option value="json">JSON mode only</option>
+        <option value="prompt">Prompt only (no enforcement)</option>
+      </select>
+    </label>
+    <label>Temperature<input id="temp" type="number" min="0" max="2" step="0.1" value="0" style="width:110px"></label>
+    <label>Max tokens<input id="maxTok" type="number" min="64" step="1" value="1024" style="width:130px"></label>
+  </div>
+  <label>Prompt<textarea id="prompt" rows="12"></textarea></label>
+  <label>JSON Schema<textarea id="schema" rows="10"></textarea></label>
+  <p class="empty" style="margin:0">
+    <b>Enforcement is the experiment.</b> "Auto" uses each provider's strongest mechanism —
+    a response schema on Gemini, a forced tool call on Anthropic, <code>json_schema</code> on OpenAI-compatible
+    routes that take it. Set it to <b>Prompt only</b> to see which models hold the shape with nothing but
+    instructions; that difference is usually the most useful thing on this page.
+  </p>
+</section>
+
+<section class="panel" aria-labelledby="p3">
+  <h2 id="p3"><span class="n">3</span>Fixtures</h2>
+  <div class="row">
+    <label class="grow">Add photos<input type="file" id="fxFiles" accept="image/png,image/jpeg,image/webp" multiple></label>
+    <button type="button" class="btn small" id="fxClear">Remove all</button>
+    <span class="empty" id="fxCount"></span>
+  </div>
+  <p class="empty" style="margin:0">
+    Label each photo yourself — that label is the truth everything is scored against.
+    Mark photos with <b>no garment at all</b> as negatives: a model that confidently reads a garment out of
+    a blanket or a desk has failed, and that is the single most important thing to measure.
+  </p>
+  <div class="fx" id="fx"></div>
+</section>
+
+<section class="panel" aria-labelledby="p4">
+  <h2 id="p4"><span class="n">4</span>Scores</h2>
+  <div class="summary" id="summary">Add fixtures and run to see scores.</div>
+  <div class="score" id="score"></div>
+  <div id="disagree"></div>
+</section>
+
+<section class="panel" aria-labelledby="p5">
+  <div class="toolbar">
+    <h2 id="p5"><span class="n">5</span>Per fixture</h2>
+    <div class="row">
+      <button type="button" class="btn small" id="dlCsv">Download CSV</button>
+      <button type="button" class="btn small" id="dlMd">Download .md</button>
+      <button type="button" class="btn small" id="dlJson">Download .json</button>
+      <button type="button" class="btn small" id="clearRuns">Clear results</button>
+    </div>
+  </div>
+  <div id="table"><span class="empty">No runs yet.</span></div>
+</section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* Vision eval — same photo, same schema, every model, scored against your own labels.
+   Keys are shared with Compare models and never leave this browser except to the provider. */
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let toastT;
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("on"),3200);}
+
+/* ---------- Providers (same shape and same stored keys as Compare models) ---------- */
+const PROVIDERS = {
+  gemini:     { name:"Gemini", key:"gemini_key", kind:"gemini", base:"https://generativelanguage.googleapis.com/v1beta", def:"gemini-3.5-flash-lite", schema:"native" },
+  openrouter: { name:"OpenRouter", key:"openrouter_key", kind:"openai", base:"https://openrouter.ai/api/v1", def:"", schema:"json_schema" },
+  groq:       { name:"Groq", key:"groq_key", kind:"openai", base:"https://api.groq.com/openai/v1", def:"", schema:"json_object" },
+  mistral:    { name:"Mistral", key:"mistral_key", kind:"openai", base:"https://api.mistral.ai/v1", def:"pixtral-12b-2409", schema:"json_object" },
+  openai:     { name:"OpenAI", key:"openai_key", kind:"openai", base:"https://api.openai.com/v1", def:"", paid:true, maxKey:"max_completion_tokens", schema:"json_schema" },
+  anthropic:  { name:"Anthropic (Claude)", key:"anthropic_key", kind:"anthropic", base:"https://api.anthropic.com/v1", def:"claude-haiku-5-5", paid:true, schema:"tool" },
+  custom:     { name:"Custom (OpenAI-compatible)", key:null, kind:"openai", base:"", def:"", schema:"json_schema" }
+};
+const secret = k => store.get("apibench.secret."+k, "");
+const setSecret = (k,v) => store.set("apibench.secret."+k, v);
+const keyOf = r => r.provider==="custom" ? (r.customKey||"") : secret(PROVIDERS[r.provider].key);
+const baseOf = r => r.provider==="custom" ? (r.customBase||"") : PROVIDERS[r.provider].base;
+
+/* Image support. Mirrors Compare models, trimmed to the families that matter here. */
+const VISION = [
+  {re:/^claude-/i,ok:true},{re:/^gemini-/i,ok:true},{re:/^gemma-([3-9]|\d\d)/i,ok:true},
+  {re:/^gpt-(4o|4\.1|4-turbo|5)/i,ok:true},{re:/^(o1|o3|o4)\b/i,ok:true},{re:/pixtral/i,ok:true},
+  {re:/llama-(3\.2|4)/i,ok:true},{re:/(scout|maverick)/i,ok:true},{re:/qwen.*-vl/i,ok:true},
+  {re:/-vl\b|vision/i,ok:true},{re:/nova-(lite|pro|premier)/i,ok:true},{re:/grok-(2-vision|3|4)/i,ok:true},
+  {re:/gpt-oss|^deepseek|^command-(a|r)|^(mixtral|codestral|ministral)/i,ok:false}
+];
+const canSeeImages = id => { const f = VISION.find(v=>v.re.test(id||"")); return f ? f.ok : /vl|vision|omni|multimodal/i.test(id||""); };
+
+/* ---------- The task ---------- */
+const SLOTS = ["base","mid","outer","head","hands","carry"];
+const REJECTS = ["no_garment","multiple_garments","too_dark","too_blurry","too_close","too_far","obscured"];
+
+const GARMENT_SCHEMA = {
+  type:"object", additionalProperties:false,
+  required:["usable","reject_reason","garment","confidence","visible_evidence"],
+  properties:{
+    usable:{type:"boolean"},
+    reject_reason:{type:"string", enum:[...REJECTS,"none"]},
+    garment:{type:"object", additionalProperties:false,
+      required:["name","slot","warmth","wind","water","dressy","warmth_basis"],
+      properties:{
+        name:{type:"string"}, slot:{type:"string", enum:SLOTS},
+        warmth:{type:"integer", minimum:0, maximum:10},
+        wind:{type:"number", minimum:0, maximum:1},
+        water:{type:"number", minimum:0, maximum:1},
+        dressy:{type:"integer", minimum:0, maximum:10},
+        warmth_basis:{type:"string"}
+      }},
+    confidence:{type:"object", additionalProperties:false,
+      required:["name","slot","warmth","wind","water","dressy"],
+      properties:Object.fromEntries(["name","slot","warmth","wind","water","dressy"].map(k=>[k,{type:"number",minimum:0,maximum:1}]))},
+    visible_evidence:{type:"array", items:{type:"string"}}
+  }
+};
+
+const GARMENT_PROMPT = `You are rating ONE garment from a photograph so a layering engine can use it.
+
+Rules:
+1. State only what is visible in the image. Never name a brand or a fibre composition unless a label is legible, and if you read a label say so in visible_evidence.
+2. If there is no garment, or you cannot identify it with confidence, set usable to false and give a reject_reason. Abstaining is a correct answer, not a failure.
+3. A blanket, towel, curtain, rug or cushion is NOT a garment. Footwear has no slot here: reject it.
+4. visible_evidence must list only things you can actually see. It is checked against the image.
+5. Rate warmth on this scale: T-shirt 1, Hoodie 3, Overcoat 5, Winter puffer 7.
+6. Confidence is PER FIELD. Slot is usually certain; warmth and water resistance rarely are. Do not report the same number for every field.
+7. When usable is false, still return a garment object and a confidence object with zeros.
+
+slot: base = next to the skin, mid = worn over a base, outer = worn on top, head, hands, carry.
+reject_reason: use "none" when usable is true.`;
+
+/* ---------- Model rows ---------- */
+let rows = store.get("apibench.vision.rows", [{provider:"gemini",model:""}]);
+const saveRows = () => store.set("apibench.vision.rows", rows.map(r=>({provider:r.provider,model:r.model,customBase:r.customBase,customKey:r.customKey})));
+
+function renderModels(){
+  $("#models").innerHTML = rows.map((r,i)=>{
+    const P = PROVIDERS[r.provider], k = keyOf(r), sees = canSeeImages(r.model);
+    return `<div class="mrow">
+      <span class="idx">${i+1}</span>
+      <select data-prov="${i}">${Object.entries(PROVIDERS).map(([v,p])=>`<option value="${v}"${v===r.provider?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
+      <input data-model="${i}" placeholder="${esc(P.def||"model id")}" value="${esc(r.model||"")}">
+      <input data-key="${i}" type="password" placeholder="${P.key?esc(P.key):"key"}" value="${esc(P.key?k:(r.customKey||""))}">
+      <button type="button" class="btn small" data-del="${i}" aria-label="Remove row ${i+1}">✕</button>
+      <div class="caps">
+        <span class="cap ${sees?"yes":"no"}">${sees?"sees images":"text only — will be skipped"}</span>
+        <span class="cap ${k?"yes":"no"}">${k?"key set":"no key"}</span>
+        <span class="cap src">enforcement: ${esc(enforcementFor(r))}</span>
+        ${P.paid?'<span class="cap">paid</span>':""}
+      </div>
+      ${r.provider==="custom"?`<div class="custom"><input data-base="${i}" placeholder="https://host/v1" value="${esc(r.customBase||"")}"></div>`:""}
+    </div>`;
+  }).join("");
+  $("#runHint").textContent = `${rows.filter(r=>canSeeImages(r.model)&&keyOf(r)).length} of ${rows.length} rows ready · ${fixtures.length} fixtures · ${rows.filter(r=>canSeeImages(r.model)&&keyOf(r)).length*fixtures.length} calls`;
+}
+
+function enforcementFor(r){
+  const want = $("#enforce")?.value || "auto", P = PROVIDERS[r.provider];
+  if (want==="prompt") return "prompt only";
+  if (want==="json") return P.kind==="anthropic" ? "tool (no json mode)" : "json mode";
+  if (want==="schema") return P.schema==="json_object" ? "json mode (no schema support)" : P.schema;
+  return P.schema==="native" ? "response schema" : P.schema==="tool" ? "forced tool" : P.schema==="json_schema" ? "json_schema" : "json mode";
+}
+
+document.addEventListener("change", e=>{
+  const t=e.target;
+  if (t.dataset.prov!=null){ rows[+t.dataset.prov].provider=t.value; rows[+t.dataset.prov].model=""; saveRows(); renderModels(); }
+  else if (t.dataset.model!=null){ rows[+t.dataset.model].model=t.value.trim(); saveRows(); renderModels(); }
+  else if (t.dataset.key!=null){ const r=rows[+t.dataset.key], P=PROVIDERS[r.provider];
+    if (P.key) setSecret(P.key,t.value.trim()); else r.customKey=t.value.trim(); saveRows(); renderModels(); }
+  else if (t.dataset.base!=null){ rows[+t.dataset.base].customBase=t.value.trim(); saveRows(); }
+  else if (t.id==="enforce"){ renderModels(); }
+});
+document.addEventListener("click", e=>{
+  const d=e.target.closest("[data-del]"); if(d){ rows.splice(+d.dataset.del,1); if(!rows.length) rows=[{provider:"gemini",model:""}]; saveRows(); renderModels(); }
+});
+$("#addModel").onclick = ()=>{ rows.push({provider:"gemini",model:""}); saveRows(); renderModels(); };
+$("#presetVision").onclick = ()=>{
+  rows = [ {provider:"gemini",model:"gemini-3.5-flash-lite"}, {provider:"anthropic",model:"claude-haiku-5-5"}, {provider:"openai",model:"gpt-4o-mini"} ];
+  saveRows(); renderModels(); toast("Preset loaded — set keys for any that are missing");
+};
+
+/* ---------- Fixtures ---------- */
+let fixtures = store.get("apibench.vision.fixtures", []);
+const saveFx = ()=>{ try{ store.set("apibench.vision.fixtures", fixtures); }catch(e){ toast("Browser storage is full — remove a few fixtures"); } };
+
+function renderFx(){
+  $("#fxCount").textContent = `${fixtures.filter(f=>f.truth).length} labelled · ${fixtures.filter(f=>!f.truth).length} negative`;
+  $("#fx").innerHTML = fixtures.map((f,i)=>{
+    const t=f.truth;
+    return `<div class="fxc">
+      <img src="${f.dataUrl}" alt="">
+      <span class="nm">${esc(f.name)}</span>
+      <select data-fx="${i}" data-f="kind">
+        <option value="labelled"${t?" selected":""}>labelled garment</option>
+        <option value="negative"${!t?" selected":""}>negative — must refuse</option>
+      </select>
+      ${t?`<div class="lab">
+        <label>slot<select data-fx="${i}" data-f="slot">${SLOTS.map(s=>`<option${s===t.slot?" selected":""}>${s}</option>`).join("")}</select></label>
+        <label>warmth<input type="number" min="0" max="10" value="${t.warmth}" data-fx="${i}" data-f="warmth"></label>
+        <label>wind 0-1<input type="number" min="0" max="1" step="0.1" value="${t.wind}" data-fx="${i}" data-f="wind"></label>
+        <label>water 0-1<input type="number" min="0" max="1" step="0.1" value="${t.water}" data-fx="${i}" data-f="water"></label>
+        <label>dressy<input type="number" min="0" max="10" value="${t.dressy}" data-fx="${i}" data-f="dressy"></label>
+        <label>&nbsp;<button type="button" class="btn small" data-rm="${i}">Remove</button></label>
+      </div>`:`<button type="button" class="btn small" data-rm="${i}">Remove</button>`}
+    </div>`;
+  }).join("") || '<span class="empty">No fixtures yet.</span>';
+  renderModels();
+}
+document.addEventListener("change", e=>{
+  const t=e.target; if(t.dataset.fx==null) return;
+  const f=fixtures[+t.dataset.fx], k=t.dataset.f;
+  if (k==="kind") f.truth = t.value==="negative" ? null : (f.truth||{slot:"outer",warmth:5,wind:0.2,water:0.2,dressy:4});
+  else if (f.truth) f.truth[k] = k==="slot" ? t.value : Number(t.value);
+  saveFx(); renderFx();
+});
+document.addEventListener("click", e=>{
+  const b=e.target.closest("[data-rm]"); if(b){ fixtures.splice(+b.dataset.rm,1); saveFx(); renderFx(); }
+});
+$("#fxClear").onclick = ()=>{ fixtures=[]; saveFx(); renderFx(); };
+$("#fxFiles").onchange = async e=>{
+  for (const file of [...e.target.files]){
+    try{
+      const dataUrl = await shrink(file);
+      fixtures.push({ id:"fx"+Math.random().toString(36).slice(2,8), name:file.name.replace(/\.[^.]+$/,"").slice(0,40), dataUrl,
+        truth:{slot:"outer",warmth:5,wind:0.2,water:0.2,dressy:4} });
+    }catch(_){ toast("Could not read "+file.name); }
+  }
+  e.target.value=""; saveFx(); renderFx();
+};
+async function shrink(file, maxEdge=768, q=0.8){
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(1, maxEdge/Math.max(bmp.width,bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width*s); c.height = Math.round(bmp.height*s);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  bmp.close?.();
+  return c.toDataURL("image/jpeg", q);   // canvas redraw also drops EXIF, so no GPS leaves the browser
+}
+
+/* ---------- Request building ---------- */
+function splitDataUrl(u){ const m=/^data:([^;,]+);base64,(.*)$/s.exec(u); return {mime:m[1], b64:m[2]}; }
+
+function buildRequest(r, dataUrl){
+  const P=PROVIDERS[r.provider], base=baseOf(r), key=keyOf(r);
+  const {mime,b64}=splitDataUrl(dataUrl);
+  const prompt=$("#prompt").value, schema=JSON.parse($("#schema").value);
+  const temp=Number($("#temp").value), maxTok=Number($("#maxTok").value);
+  const mode=$("#enforce").value;
+  const useSchema = mode==="auto" || mode==="schema";
+  const useJson   = useSchema || mode==="json";
+
+  if (P.kind==="gemini"){
+    const gen = { temperature:temp, maxOutputTokens:maxTok };
+    if (useJson) gen.responseMimeType="application/json";
+    if (useSchema) gen.responseSchema=toGemini(schema);
+    return { url:`${base}/models/${encodeURIComponent(r.model)}:generateContent`,
+      headers:{"Content-Type":"application/json","x-goog-api-key":key},
+      body:{ contents:[{role:"user",parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}], generationConfig:gen } };
+  }
+  if (P.kind==="anthropic"){
+    const body = { model:r.model, max_tokens:maxTok, temperature:Math.min(temp,1),
+      messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}] };
+    if (useSchema||useJson){ body.tools=[{name:"record",description:"Record the reading.",input_schema:schema}]; body.tool_choice={type:"tool",name:"record"}; }
+    return { url:`${base}/messages`, headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}, body };
+  }
+  const body = { model:r.model, temperature:temp, [P.maxKey||"max_tokens"]:maxTok,
+    messages:[{role:"user",content:[{type:"image_url",image_url:{url:dataUrl}},{type:"text",text:prompt}]}] };
+  if (useSchema && P.schema==="json_schema") body.response_format={type:"json_schema",json_schema:{name:"reading",schema,strict:false}};
+  else if (useJson) body.response_format={type:"json_object"};
+  return { url:`${base}/chat/completions`, headers:{"Content-Type":"application/json",Authorization:"Bearer "+key}, body };
+}
+
+/* Gemini's schema dialect is a subset: no additionalProperties, no unions, enums on strings only. */
+function toGemini(n){
+  if (!n||typeof n!=="object") return n;
+  const type = Array.isArray(n.type)?(n.type.find(t=>t!=="null")||"string"):n.type;
+  const o = { type:String(type).toUpperCase() };
+  if (type==="object"){
+    o.properties=Object.fromEntries(Object.entries(n.properties||{}).map(([k,v])=>[k,toGemini(v)]));
+    const req=(n.required||[]).filter(k=>o.properties[k]); if(req.length) o.required=req;
+  } else if (type==="array") o.items=toGemini(n.items||{type:"string"});
+  else if (type==="string"&&Array.isArray(n.enum)){ const v=n.enum.filter(x=>typeof x==="string"); if(v.length){o.format="enum";o.enum=v;} }
+  return o;
+}
+
+function extractText(r,j){
+  const P=PROVIDERS[r.provider];
+  if (P.kind==="gemini"){ const c=(j.candidates||[])[0]||{}; return {text:(c.content?.parts||[]).filter(p=>!p.thought).map(p=>p.text||"").join(""), usage:j.usageMetadata||{}, finish:c.finishReason||""}; }
+  if (P.kind==="anthropic"){ const tu=(j.content||[]).find(b=>b.type==="tool_use");
+    return { text: tu?JSON.stringify(tu.input):(j.content||[]).filter(b=>b.type==="text").map(b=>b.text).join(""), usage:j.usage||{}, finish:j.stop_reason||"" }; }
+  const c=(j.choices||[])[0]||{}; return {text:c.message?.content??"", usage:j.usage||{}, finish:c.finish_reason||""};
+}
+
+/* Parse what came back. Tolerant on purpose: whether a model needed the tolerance IS the measurement. */
+function parseReading(text){
+  const raw = String(text||"").trim();
+  if (!raw) return {ok:false, how:"empty", obj:null};
+  try { return {ok:true, how:"clean", obj:JSON.parse(raw)}; } catch(_){}
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence){ try { return {ok:true, how:"fenced", obj:JSON.parse(fence[1])}; } catch(_){} }
+  const a=raw.indexOf("{"), b=raw.lastIndexOf("}");
+  if (a>=0&&b>a){ try { return {ok:true, how:"embedded", obj:JSON.parse(raw.slice(a,b+1))}; } catch(_){} }
+  return {ok:false, how:"unparseable", obj:null};
+}
+
+function normalise(o){
+  if (!o||typeof o!=="object") return null;
+  const num=(v,lo,hi,d)=>Number.isFinite(Number(v))?Math.min(hi,Math.max(lo,Number(v))):d;
+  const g=o.garment||{}, c=o.confidence||{};
+  return {
+    usable: o.usable===true,
+    reject_reason: REJECTS.includes(o.reject_reason)?o.reject_reason:null,
+    garment: { name:String(g.name||"").slice(0,60), slot:SLOTS.includes(g.slot)?g.slot:null,
+      warmth:Math.round(num(g.warmth,0,10,0)), wind:num(g.wind,0,1,0), water:num(g.water,0,1,0),
+      dressy:Math.round(num(g.dressy,0,10,0)), warmth_basis:String(g.warmth_basis||"").slice(0,160) },
+    confidence: Object.fromEntries(["name","slot","warmth","wind","water","dressy"].map(k=>[k,num(c[k],0,1,0)])),
+    visible_evidence: Array.isArray(o.visible_evidence)?o.visible_evidence.filter(s=>typeof s==="string").slice(0,8):[]
+  };
+}
+
+/* ---------- Run ---------- */
+let runs = [];
+const BANNED = /\b(merino|cashmere|gore[- ]?tex|polyester|nylon|\d{1,3}\s?%|nike|adidas|uniqlo|patagonia|zara|machine wash|dry clean)\b/i;
+
+$("#runAll").onclick = async ()=>{
+  const live = rows.filter(r=>r.model && keyOf(r) && canSeeImages(r.model));
+  if (!live.length) return toast("No row has a model, a key and image support");
+  if (!fixtures.length) return toast("Add at least one fixture");
+  try { JSON.parse($("#schema").value); } catch(e){ return toast("Schema is not valid JSON"); }
+  const paid = live.filter(r=>PROVIDERS[r.provider].paid).map(r=>PROVIDERS[r.provider].name);
+  if (paid.length && !confirm(`${live.length} model(s) × ${fixtures.length} fixtures = ${live.length*fixtures.length} calls.\nPaid: ${[...new Set(paid)].join(", ")}.\n\nRun?`)) return;
+
+  runs = []; $("#runAll").disabled = true;
+  let done = 0, total = live.length*fixtures.length;
+  for (const r of live){
+    for (const f of fixtures){
+      $("#summary").innerHTML = `Running… ${++done} / ${total} <div class="bar"><i style="width:${Math.round(100*done/total)}%"></i></div>`;
+      runs.push(await runOne(r,f));
+      render();
+    }
+  }
+  $("#runAll").disabled = false;
+  render(); toast("Done");
+};
+
+async function runOne(r,f){
+  const label = `${PROVIDERS[r.provider].name} · ${r.model}`;
+  const out = { model:label, provider:r.provider, modelId:r.model, fixture:f.name, truth:f.truth,
+    enforcement:enforcementFor(r), ms:0, parse:null, reading:null, error:null, usage:null };
+  const t0 = performance.now();
+  try {
+    const req = buildRequest(r, f.dataUrl);
+    const res = await fetch(req.url,{method:"POST",headers:req.headers,body:JSON.stringify(req.body)});
+    out.ms = Math.round(performance.now()-t0);
+    if (!res.ok){ const t=await res.text().catch(()=>"" ); out.error=`HTTP ${res.status} ${String(t).slice(0,140)}`; return out; }
+    const j = await res.json();
+    const ex = extractText(r,j);
+    out.usage = ex.usage; out.finish = ex.finish;
+    const p = parseReading(ex.text);
+    out.parse = p.how;
+    out.rawText = String(ex.text||"").slice(0,2000);
+    if (p.ok) out.reading = normalise(p.obj);
+    if (!out.reading) out.error = out.error || `could not parse (${p.how})`;
+  } catch(e){
+    out.ms = Math.round(performance.now()-t0);
+    out.error = String(e?.message||e).slice(0,160);
+  }
+  return out;
+}
+
+/* ---------- Scoring ---------- */
+const asBool = (f,v) => f==="dressy" ? v>=6 : v>=0.5;
+const FLAGS = ["wind","water","dressy"];
+
+function scoreModel(rs){
+  const pos = rs.filter(r=>r.truth && r.reading?.usable);
+  const neg = rs.filter(r=>r.truth===null);
+  const parsed = rs.filter(r=>r.reading);
+  const slotHits = pos.filter(r=>r.reading.garment.slot===r.truth.slot).length;
+  const errs = pos.map(r=>Math.abs(r.reading.garment.warmth-r.truth.warmth));
+  const mae = errs.length ? errs.reduce((a,b)=>a+b,0)/errs.length : null;
+  const spread = errs.length ? Math.max(...pos.map(r=>r.reading.garment.warmth))-Math.min(...pos.map(r=>r.reading.garment.warmth)) : 0;
+  const flags = Object.fromEntries(FLAGS.map(f=>[f, pos.length? pos.filter(r=>asBool(f,r.reading.garment[f])===asBool(f,r.truth[f])).length/pos.length : null]));
+  const abstained = neg.filter(r=>!r.reading || r.reading.usable===false).length;
+  const banned = parsed.filter(r=>{
+    const g=r.reading.garment, ev=(r.reading.visible_evidence||[]).join(" ");
+    const said=[g.name,g.warmth_basis,ev].join(" ");
+    if (!BANNED.test(said)) return false;
+    return !/label|tag/i.test(ev);          // a legible label is evidence, not invention
+  }).length;
+  // uniform confidence: the model reporting one number for every field
+  const uniform = parsed.filter(r=>{ const c=Object.values(r.reading.confidence); return new Set(c.map(x=>x.toFixed(2))).size===1; }).length;
+
+  // calibration
+  const pts=[];
+  for (const r of pos){ const g=r.reading.garment,t=r.truth,c=r.reading.confidence;
+    pts.push({c:c.slot,ok:g.slot===t.slot}); pts.push({c:c.warmth,ok:Math.abs(g.warmth-t.warmth)<=1});
+    FLAGS.forEach(f=>pts.push({c:c[f],ok:asBool(f,g[f])===asBool(f,t[f])})); }
+  let ece=null, buckets=[];
+  if (pts.length){
+    for(let lo=0;lo<1;lo+=0.2){ const inside=pts.filter(p=>p.c>=lo&&(lo+0.2>=1?p.c<=lo+0.2:p.c<lo+0.2));
+      if(!inside.length) continue;
+      const stated=inside.reduce((a,p)=>a+p.c,0)/inside.length, actual=inside.filter(p=>p.ok).length/inside.length;
+      buckets.push({lo,n:inside.length,stated,actual,gap:actual-stated}); }
+    ece = buckets.reduce((a,b)=>a+(b.n/pts.length)*Math.abs(b.gap),0);
+  }
+  return {
+    n:rs.length, parsed:parsed.length, parseRate:parsed.length/rs.length,
+    clean: rs.filter(r=>r.parse==="clean").length,
+    errors: rs.filter(r=>r.error).length,
+    slotAcc: pos.length?slotHits/pos.length:null, mae, spread, flags,
+    abstainRate: neg.length?abstained/neg.length:null, leaked: neg.filter(r=>r.reading?.usable).map(r=>r.fixture),
+    banned, uniform, ece, buckets,
+    msAvg: Math.round(rs.reduce((a,r)=>a+r.ms,0)/Math.max(1,rs.length)),
+    tokens: rs.reduce((a,r)=>a+(r.usage?.totalTokenCount||r.usage?.total_tokens||((r.usage?.input_tokens||0)+(r.usage?.output_tokens||0))||0),0)
+  };
+}
+
+/* ---------- Render ---------- */
+const pct = v => v==null?"—":(v*100).toFixed(0)+"%";
+const mark = v => v==null?'<span class="empty">—</span>':v?'<span class="ok">pass</span>':'<span class="bad">fail</span>';
+
+function render(){
+  if (!runs.length){ $("#summary").textContent="Add fixtures and run to see scores."; $("#score").innerHTML=""; $("#table").innerHTML='<span class="empty">No runs yet.</span>'; $("#disagree").innerHTML=""; return; }
+  const byModel = [...new Set(runs.map(r=>r.model))];
+  $("#summary").innerHTML = `${runs.length} calls · ${byModel.length} model(s) · ${fixtures.length} fixtures`;
+
+  $("#score").innerHTML = byModel.map(m=>{
+    const s = scoreModel(runs.filter(r=>r.model===m));
+    const fails = [s.parseRate<1, s.abstainRate!==null&&s.abstainRate<1, s.banned>0, s.ece!==null&&s.ece>0.1].filter(Boolean).length;
+    return `<div class="sc">
+      <h3>${esc(m)}</h3>
+      <div class="verdict ${fails===0?"ok":"bad"}">${fails===0?"pass":fails===1?"1 issue":fails+" issues"}</div>
+      <table>
+        <tr><td>Returned usable JSON</td><td class="num">${pct(s.parseRate)}</td><td>${mark(s.parseRate===1)}</td></tr>
+        <tr><td>…without repair</td><td class="num">${s.clean}/${s.n}</td><td></td></tr>
+        <tr><td>Refused every negative</td><td class="num">${pct(s.abstainRate)}</td><td>${mark(s.abstainRate===null?null:s.abstainRate===1)}</td></tr>
+        <tr><td>Slot accuracy</td><td class="num">${pct(s.slotAcc)}</td><td>${mark(s.slotAcc===null?null:s.slotAcc>=0.95)}</td></tr>
+        <tr><td>Warmth mean error</td><td class="num">${s.mae==null?"—":s.mae.toFixed(2)}</td><td>${mark(s.mae==null?null:s.mae<=1.5)}</td></tr>
+        <tr><td>Warmth spread</td><td class="num">${s.spread}</td><td>${s.spread<=1?'<span class="bad">flat</span>':""}</td></tr>
+        ${FLAGS.map(f=>`<tr><td>${f}</td><td class="num">${pct(s.flags[f])}</td><td>${mark(s.flags[f]===null?null:s.flags[f]>=0.85)}</td></tr>`).join("")}
+        <tr><td>Unobservable claims</td><td class="num">${s.banned}</td><td>${mark(s.banned===0)}</td></tr>
+        <tr><td>Uniform confidence</td><td class="num">${s.uniform}/${s.parsed}</td><td>${mark(s.uniform===0)}</td></tr>
+        <tr><td>Calibration error</td><td class="num">${s.ece==null?"—":s.ece.toFixed(3)}</td><td>${mark(s.ece==null?null:s.ece<=0.1)}</td></tr>
+        <tr><td>Avg latency</td><td class="num">${s.msAvg} ms</td><td></td></tr>
+        <tr><td>Tokens</td><td class="num">${s.tokens||"—"}</td><td></td></tr>
+        <tr><td>Call errors</td><td class="num">${s.errors}</td><td>${mark(s.errors===0)}</td></tr>
+      </table>
+      ${s.leaked.length?`<p class="empty"><b class="bad">Leaked:</b> ${s.leaked.map(esc).join(", ")}</p>`:""}
+    </div>`;
+  }).join("");
+
+  // Where models disagree on the same photo — usually the most informative output here.
+  if (byModel.length>1){
+    const dis = fixtures.map(f=>{
+      const rs = runs.filter(r=>r.fixture===f.name && r.reading);
+      if (rs.length<2) return null;
+      const slots=new Set(rs.map(r=>r.reading.garment.slot));
+      const warms=rs.map(r=>r.reading.garment.warmth);
+      const spread=Math.max(...warms)-Math.min(...warms);
+      if (slots.size===1 && spread<=2) return null;
+      return `<tr><td>${esc(f.name)}</td>${rs.map(r=>`<td class="mono">${esc(r.reading.garment.slot||"—")} · ${r.reading.garment.warmth}<br><span class="empty">${esc(r.reading.garment.name)}</span></td>`).join("")}</tr>`;
+    }).filter(Boolean);
+    $("#disagree").innerHTML = dis.length
+      ? `<h3 style="font-size:14px;margin:16px 0 6px">Where the models disagree</h3>
+         <table class="disagree"><tr><th>Fixture</th>${byModel.map(m=>`<th>${esc(m)}</th>`).join("")}</tr>${dis.join("")}</table>
+         <p class="empty">Different slot, or warmth more than 2 apart. These are the photos worth looking at yourself.</p>`
+      : `<p class="empty" style="margin-top:12px">No meaningful disagreement between models.</p>`;
+  } else $("#disagree").innerHTML="";
+
+  $("#table").innerHTML = `<table><tr><th>Model</th><th>Fixture</th><th>Parse</th><th>Read as</th><th class="num">Warmth</th><th>Evidence</th><th>Error</th></tr>
+    ${runs.map(r=>{
+      const g=r.reading?.garment;
+      const neg = r.truth===null, good = neg ? (!r.reading||!r.reading.usable) : !!r.reading?.usable;
+      return `<tr>
+        <td class="mono">${esc(r.modelId)}</td>
+        <td>${esc(r.fixture)}${neg?' <span class="empty">(neg)</span>':""}</td>
+        <td class="${good?"ok":"bad"}">${esc(r.parse||"—")}</td>
+        <td>${r.reading? (r.reading.usable?esc(g.name)+" · "+esc(g.slot||"?"):'<span class="empty">refused: '+esc(r.reading.reject_reason||"—")+"</span>") : "—"}</td>
+        <td class="num">${r.reading?.usable?g.warmth+(r.truth?` (${r.truth.warmth})`:""):"—"}</td>
+        <td class="empty">${esc((r.reading?.visible_evidence||[]).join(", ")).slice(0,90)}</td>
+        <td class="bad">${esc(r.error||"")}</td></tr>`;
+    }).join("")}</table>`;
+}
+
+/* ---------- Export ---------- */
+function dl(name, text, type){ const b=new Blob([text],{type}); const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
+const stamp = ()=> new Date().toISOString().slice(0,10);
+$("#dlCsv").onclick = ()=>{
+  if(!runs.length) return toast("Nothing to export");
+  const cell=v=>{const s=v==null?"":String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const head=["model","fixture","kind","enforcement","parse","usable","reject","name","slot","warmth","wind","water","dressy","truth_slot","truth_warmth","conf_slot","conf_warmth","evidence","ms","error"];
+  const lines=[head.join(",")];
+  runs.forEach(r=>{const g=r.reading?.garment||{},c=r.reading?.confidence||{},t=r.truth||{};
+    lines.push([r.modelId,r.fixture,r.truth===null?"negative":"labelled",r.enforcement,r.parse,r.reading?.usable,r.reading?.reject_reason,
+      g.name,g.slot,g.warmth,g.wind,g.water,g.dressy,t.slot,t.warmth,c.slot,c.warmth,(r.reading?.visible_evidence||[]).join("; "),r.ms,r.error].map(cell).join(","));});
+  dl(`vision-eval-${stamp()}.csv`, lines.join("\n"), "text/csv");
+};
+$("#dlJson").onclick = ()=>{ if(!runs.length) return toast("Nothing to export");
+  dl(`vision-eval-${stamp()}.json`, JSON.stringify({ranAt:new Date().toISOString(),prompt:$("#prompt").value,schema:JSON.parse($("#schema").value),enforcement:$("#enforce").value,runs},null,2), "application/json"); };
+$("#dlMd").onclick = ()=>{
+  if(!runs.length) return toast("Nothing to export");
+  const byModel=[...new Set(runs.map(r=>r.model))];
+  let md=`# Vision eval — ${stamp()}\n\nEnforcement: ${$("#enforce").value}\nFixtures: ${fixtures.length}\n\n## Scores\n\n`;
+  md+=`| Model | JSON | Refused negs | Slot | Warmth MAE | Banned | ECE | ms |\n|---|---|---|---|---|---|---|---|\n`;
+  byModel.forEach(m=>{const s=scoreModel(runs.filter(r=>r.model===m));
+    md+=`| ${m} | ${pct(s.parseRate)} | ${pct(s.abstainRate)} | ${pct(s.slotAcc)} | ${s.mae==null?"—":s.mae.toFixed(2)} | ${s.banned} | ${s.ece==null?"—":s.ece.toFixed(3)} | ${s.msAvg} |\n`;});
+  md+=`\n## Prompt\n\n\`\`\`\n${$("#prompt").value}\n\`\`\`\n`;
+  dl(`vision-eval-${stamp()}.md`, md, "text/markdown");
+};
+$("#clearRuns").onclick = ()=>{ runs=[]; render(); };
+
+/* ---------- Boot ---------- */
+$("#prompt").value = GARMENT_PROMPT;
+$("#schema").value = JSON.stringify(GARMENT_SCHEMA,null,2);
+$("#preset").onchange = e=>{ if(e.target.value==="garment"){ $("#prompt").value=GARMENT_PROMPT; $("#schema").value=JSON.stringify(GARMENT_SCHEMA,null,2); } };
+renderFx();
+render();
+
+</script>
+</body>
+</html>
